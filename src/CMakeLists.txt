@@ -1,0 +1,5 @@
+add_subdirectory(db)
+add_subdirectory(dicom)
+add_subdirectory(utils)
+add_subdirectory(system)
+add_subdirectory(settings/aet)
