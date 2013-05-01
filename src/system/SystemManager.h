@@ -10,10 +10,12 @@ class SystemManager : public Singleton<SystemManager>
 {
     friend class Singleton;
 private:
+    MPSSystem* m_system;
     SystemManager();
     
 public:
-    MPSSystem* m_system;
+    inline MPSSystem* mpsSystem() {return this->m_system;}
+    ~SystemManager();
 };
 
 #endif // SYSTEMMANAGER_H

@@ -12,14 +12,27 @@ find_package(Qt5Widgets)
 
 add_executable(
 mps-qt5 
-src/utils/thread/Thread.cpp 
+src/tasks/TaskDcmSCP.cpp 
+src/utils/exception/WaitingMessageErrorExcep.cpp 
+src/dicom/net/DIMSEMessajeFactory.cpp 
+src/tasks/DcmTask.cpp 
+src/utils/exception/CalledAETErrorExcep.cpp 
+src/tasks/TaskQRMoveSCP.cpp 
+src/tasks/TaskQRFindSCP.cpp 
+src/tasks/TaskHandleRqDCMConn.cpp 
+src/tasks/TaskStoreSCP.cpp 
+src/tasks/TaskFactory.cpp 
+src/tasks/TaskQRMoveSCU.cpp 
+src/tasks/TaskQRFindSCU.cpp 
+src/tasks/TaskEchoSCP.cpp 
+src/tasks/TaskStoreSCU.cpp 
+src/tasks/TaskEchoSCU.cpp 
+src/tasks/TaskManager.cpp 
+src/tasks/Task.cpp  
 main.cpp
 src/system/SystemManager.cpp 
 src/system/MPSSystem.cpp 
-src/dicom/net/AssociationHandler.cpp 
 src/settings/aet/AetTableManager.cpp  
-src/utils/thread/ThreadManager.cpp 
-src/utils/thread/ThreadCEchoSCP.cpp
 src/dicom/net/DcmNetSCP.cpp 
 src/utils/callback/progress/CFindeRSPProgress.cpp 
 src/utils/callback/progress/Progress.cpp 
@@ -36,17 +49,38 @@ src/utils/Status.cpp
 )
 
 target_link_libraries(  mps-qt5
-                        /usr/lib/dcmtk/libofstd.so
-                        /usr/lib/dcmtk/libdcmnet.a
-                        /usr/lib/dcmtk/libdcmdata.a
-                        /usr/lib/dcmtk/liboflog.a
+                        /home/freddy/.local/lib/libofstd.so
+                        /home/freddy/.local/lib/libdcmnet.so
+                        /home/freddy/.local/lib/libdcmdata.so
+                        /home/freddy/.local/lib/liboflog.so
+                        /home/freddy/.local/lib/libcharls.so
+                        /home/freddy/.local/lib/libdcmdsig.so
+                        /home/freddy/.local/lib/libdcmimage.so
+                        /home/freddy/.local/lib/libdcmimgle.so
+                        /home/freddy/.local/lib/libdcmjpeg.so
+                        /home/freddy/.local/lib/libdcmjpls.so
+                        /home/freddy/.local/lib/libdcmpstat.so
+                        /home/freddy/.local/lib/libdcmqrdb.so
+                        /home/freddy/.local/lib/libdcmrt.so
+                        /home/freddy/.local/lib/libdcmsr.so
+                        /home/freddy/.local/lib/libdcmtls.so
+                        /home/freddy/.local/lib/libdcmwlm.so
+                        
+                        # BOOS LIBRARIES
+                        /usr/lib/libboost_system.so
+                        /usr/lib/libboost_date_time.so
+                        /usr/lib/libboost_thread.so
+                        
                         libpthread.so
                         libz.so
                      )
 # Use the Widgets module from Qt 5.
 qt5_use_modules(mps-qt5 Widgets Core)
 
-include_directories(./src ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Core_INCLUDE_DIRS})
+include_directories(
+./src 
+~/.local/include/
+)
 
 add_subdirectory(src)
 

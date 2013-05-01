@@ -2,6 +2,7 @@
 #define DCMQUERY_H
 
 #include <dcmtk/dcmdata/dcdatset.h>
+#include <dcmtk/dcmdata/dcelem.h>
 
 
 class DcmQuery
@@ -25,6 +26,7 @@ public:
     inline void setQueryLevel(QueryLevel level){this->m_level = level;}
     inline QueryLevel queryLevel(){return this->m_level;}
     void addKey(const DcmElement* key);
+    bool checkDS(DcmDataset* ds);
     virtual ~DcmQuery();
 };
 

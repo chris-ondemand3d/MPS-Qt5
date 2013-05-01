@@ -14,7 +14,7 @@ Status DcmNetSCU::cecho_RQ(DcmAET& remoteAet, int timeout)
     OFCondition cond;
     T_ASC_Network * network;
     Status result(Status::Succes, "Success");
-    if ((cond = ASC_initializeNetwork(NET_REQUESTOR, remoteAet.port(), 0, &network)).good())
+    if ((cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 0, &network)).good())
     {
         T_ASC_Parameters* params;
         ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
@@ -114,7 +114,7 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, FileManager& directory, int timeo
     Status result(Status::Succes, "C-STORE Success.");
 
     T_ASC_Network* network;
-    if (ASC_initializeNetwork(NET_REQUESTOR, remoteAet.port(), timeout, &network).good())
+    if (ASC_initializeNetwork(NET_REQUESTOR, 0, timeout, &network).good())
     {
         T_ASC_Parameters* params;
         ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
@@ -201,7 +201,7 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int 
     T_ASC_Network* network;
     Status result (Status::Succes, "C-STORE Success.");
 
-    cond = ASC_initializeNetwork(NET_REQUESTOR, remoteAet.port(), 0, &network);
+    cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 0, &network);
     if (cond.good())
     {
         // Reading the file list to build the presentation context
@@ -293,7 +293,7 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const string& file, int timeout)
     T_ASC_Association* assoc;
     Status result(Status::Succes, "C-STORE Success");
 
-    cond = ASC_initializeNetwork(NET_REQUESTOR, remoteAet.port(), 0, &network);
+    cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 0, &network);
     if (cond.good())
     {
         // Creating presentation context
@@ -396,7 +396,7 @@ Status DcmNetSCU::cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress
     Status status(Status::Succes, "C-FIND Success.");
     T_ASC_Network* network;
 
-    if ((cond = ASC_initializeNetwork(NET_REQUESTOR, remoteAet.port(), 0, &network)).good())
+    if ((cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 0, &network)).good())
     {
         T_ASC_Parameters* params;
         ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
@@ -528,9 +528,181 @@ Status DcmNetSCU::cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress
     return status;
 }
 
-Status DcmNetSCU::cmove_RQ(DcmAET& remoteAet, DcmQuery& query, Callback< Progress >* progress)
+Status DcmNetSCU::cmove_RQ(DcmAET& findAET, 
+                           DcmAET& moveAET, 
+                           DcmQuery& query, 
+                           char* dirToSave, 
+                           Callback< Progress >* progress)
 {
+    OFCondition cond;
+    Status status;
+    T_ASC_Network* network;
+    if ((cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 10, &network)).good())
+    {
+        T_ASC_Parameters* params;
+        ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
+        
+        ASC_setAPTitles(params, 
+                        this->m_localAet->aet().c_str(), 
+                        findAET.aet().c_str(), 
+                        NULL);
+        string remoteAddr = findAET.hostname() + ":" + int2str(findAET.port());
+        ASC_setPresentationAddresses(params, 
+                                     this->m_localAet->hostname().c_str(), 
+                                     remoteAddr.c_str());
+        
+        // Adding presentation context
+        char* tsList[] = {const_cast<char*>(UID_LittleEndianImplicitTransferSyntax)};
+        ASC_addPresentationContext(params, 1, UID_MOVEPatientRootQueryRetrieveInformationModel, (const char**)tsList, 1);
+        ASC_addPresentationContext(params, 3, UID_MOVEStudyRootQueryRetrieveInformationModel, (const char**)tsList, 1);
+        
+        T_ASC_Association* assoc;        
+        if ((cond = ASC_requestAssociation(network, params, &assoc)).good())
+        {
+            // association success.
+            // checking the presentation context            
+            if (ASC_countAcceptedPresentationContexts(params) == 0)
+            {
+                status.setStatus(Status::BadPresentationContext, "Error with proposed presentation context.");
+                ASC_abortAssociation(assoc);
+                ASC_dropNetwork(&network);
+                return status;
+            }
+            /* 
+             * There are some presentation context accepted.
+             * Now we need to check if the Abstract Syntax accepted was for use 
+             * Patient Root or Study Root Query/Retrieve model. If Patient and Study 
+             * Root model are accepted, we'll be used Study Root by default as Abstract 
+             * Syntax.
+             */
+            // Checking that Study Root is supported by the server
+            T_ASC_PresentationContext pc;
+            T_ASC_PresentationContextID idPC;
+            T_DIMSE_Message msgMOVE;
+            if (ASC_findAcceptedPresentationContext(params, 3, &pc).good())
+            {
+                // Using Study Root                
+                strcpy(msgMOVE.msg.CMoveRQ.AffectedSOPClassUID,(char*)UID_MOVEStudyRootQueryRetrieveInformationModel);  
+                idPC = 3;
+            }
+            else if (ASC_findAcceptedPresentationContext(params, 1, &pc).good())
+            {
+                // Using Patient Root
+                strcpy(msgMOVE.msg.CMoveRQ.AffectedSOPClassUID,(char*)UID_MOVEPatientRootQueryRetrieveInformationModel);
+                idPC = 1;
+            }
+            else
+            {
+                ASC_abortAssociation(assoc);
+                ASC_dropNetwork(&network);
+                status.setStatus(Status::AssociationError, "Unsupported presentation context.");
+            }
+            
+            msgMOVE.msg.CMoveRQ.MessageID = assoc->nextMsgID;
+            msgMOVE.CommandField = DIMSE_C_MOVE_RQ;
+            msgMOVE.msg.CMoveRQ.Priority = DIMSE_PRIORITY_MEDIUM;
+            msgMOVE.msg.CMoveRQ.DataSetType = DIMSE_DATASET_PRESENT;
+            strcpy(msgMOVE.msg.CMoveRQ.MoveDestination, moveAET.aet().c_str());
+            
+            if ((cond = DIMSE_sendMessageUsingMemoryData(assoc, 
+                                                         idPC, 
+                                                         &msgMOVE, 
+                                                         NULL, 
+                                                         query.toDataset(), 
+                                                         NULL, 
+                                                         NULL, 
+                                                         NULL)).good())
+            {
+                
+                // Handling C-MOVE response
+                T_DIMSE_Message msgMOVERsp;
+                T_ASC_PresentationContextID idPCMoveRsp;
+                
+                
+                while(true)
+                {
+                    // Receiving C-MOVE-RSP command
+                    cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 10, &idPCMoveRsp, &msgMOVERsp, NULL, NULL);
+                    if (cond.good())
+                    {
+                        switch(msgMOVERsp.msg.CMoveRSP.DimseStatus)
+                        {
+                            case STATUS_Success:
+                            case STATUS_STORE_Warning_CoersionOfDataElements:
+                            case STATUS_STORE_Warning_ElementsDiscarded:
+                            case STATUS_STORE_Warning_DataSetDoesNotMatchSOPClass:
+                            {
+                                ASC_releaseAssociation(assoc);
+                                ASC_dropAssociation(assoc);
+                                return Status(Status::Succes, (string)"C-MOVE Success: " + cond.text());
+                                break;
+                            }
+                            
+                            case STATUS_Pending:
+                            {
+                                cout << "Remaining: " << msgMOVERsp.msg.CMoveRSP.NumberOfRemainingSubOperations << endl;
+                                cout << "Fail: " << msgMOVERsp.msg.CMoveRSP.NumberOfFailedSubOperations << endl;
+                                cout << "Completed: " << msgMOVERsp.msg.CMoveRSP.NumberOfCompletedSubOperations << endl;
+                                cout << "Warnings: " << msgMOVERsp.msg.CMoveRSP.NumberOfWarningSubOperations << endl;
+                                break;
+                            }
+                            
+                            default:
+                            {
+                                // An error occur
+                                ASC_abortAssociation(assoc);
+                                ASC_dropAssociation(assoc);
+                                ASC_dropNetwork(&network);
+                                return Status(Status::CMoveRQError, (string)"C-MOVE operation error: " + cond.text());
+                            }
+                        }
+                        
+                        cout << "Remain: " << msgMOVERsp.msg.CMoveRSP.NumberOfRemainingSubOperations << endl;
+                        cout << cond.text() << endl;
+                        cout << msgMOVERsp.msg.CMoveRSP.DimseStatus << endl;
+                    }
+                    else
+                    {
+                        // receiving the last message                        
+                        status.setStatus(Status::CMoveRSPError, (string)"Error waiting C-MOVE-RSP: " + cond.text());
+                        ASC_abortAssociation(assoc);
+                        ASC_dropNetwork(&network);
+                        return status;
+                    }
+                }
+            }
+            else
+            {
+                ASC_abortAssociation(assoc);
+                status.setStatus(Status::CMoveRQError, "Error sending query: " + string(cond.text()));
+            }
+        }
+        else
+        {
+            status.setStatus(Status::AssociationError, "Error during the association process: " + string(cond.text()));
+        }
+        ASC_releaseAssociation(assoc);
+        ASC_dropAssociation(assoc);
+    }
+    else
+        status.setStatus(Status::NetworkIsNotReady, "Network error. Maybe the port is busy: " + string(cond.text()));
     
+    ASC_dropNetwork(&network);
+    
+    return status;
+}
+
+void DcmNetSCU::rejectAssoc(T_ASC_Association*& assoc, 
+                            T_ASC_RejectParametersReason reason, 
+                            T_ASC_RejectParametersResult result, 
+                            T_ASC_RejectParametersSource source)
+{
+    T_ASC_RejectParameters rejParams;
+    rejParams.reason = reason;
+    rejParams.result = result;
+    rejParams.source = source;
+    
+    ASC_rejectAssociation(assoc, &rejParams);
 }
 
 

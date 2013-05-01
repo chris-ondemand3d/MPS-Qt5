@@ -8,6 +8,12 @@ DcmQuery::DcmQuery()
     
 }
 
+bool DcmQuery::checkDS(DcmDataset* ds)
+{
+    return true;
+}
+
+
 void DcmQuery::addKey(const DcmElement* key)
 {
     if (key != NULL)

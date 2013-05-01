@@ -2,6 +2,7 @@
 
 MPSSystem::MPSSystem(QObject* parent): QObject(parent)
 {
+    this->m_taskManager = new TaskManager(this);
 }
 
 void MPSSystem::emitAssReceived()

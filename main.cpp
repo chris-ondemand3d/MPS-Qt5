@@ -1,5 +1,4 @@
-#include <qt5/QtWidgets/QApplication>
-#include <boost/concept_check.hpp>
+#include <QApplication>
 #include <dicom/net/DcmAET.h>
 #include <dicom/net/DcmNetSCU.h>
 #include <utils/filesystem/FilesManager.h>
@@ -9,17 +8,24 @@
 #include <dcmtk/dcmdata/dcvrui.h>
 #include <dcmtk/dcmdata/dcvris.h>
 #include <dicom/net/DcmNetSCP.h>
-// #include <dcmtk/dcmdata/dcdeftag.h>
+#include <dcmtk/dcmdata/dcostrma.h>
+#include <dcmtk/dcmdata/dcostrma.h>
+#include <dcmtk/dcmdata/dcdeftag.h>
+#include <stdio.h>
+#include <tasks/tasks.h>
+
 
 using namespace std;
 
 int main(int argc, char** argv)
 {
+    QApplication app(argc, argv);
+    
 //     DcmAET server("COMMON", "localhost", 1111);
-// //     DcmAET server("DCM4CHEE", "localhost", 11112);
-//     DcmAET aet("IMAGIS", "localhost", 55555);
-// 
-//     DcmNetSCU scu(aet);
+    DcmAET server("DCM4CHEE", "localhost", 11112);
+    DcmAET aet("IMAGIS", "localhost", 55555);
+
+    DcmNetSCU scu(aet);
 //     QString msg;
 //     QList<QString> files;
 //     files.append("/home/freddy/images/11");
@@ -30,18 +36,33 @@ int main(int argc, char** argv)
 //     FileManager fm("/media/Trabajo/dicom/1/");
 //     
 // //     Status status = scu.cstore_RQ(server, filename);
-//     DcmQuery query;
+    DcmQuery query;
+    
+    DcmUniqueIdentifier* studyInstanceUID = new DcmUniqueIdentifier(DCM_StudyInstanceUID);
+    studyInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814211218700000055");
+//     DcmUniqueIdentifier* seriesInstanceUID = new DcmUniqueIdentifier(DCM_SeriesInstanceUID);
+//     seriesInstanceUID->putString("1.3.12.2.1107.5.4.2.6226.20040721.161218.167");    
+//     DcmUniqueIdentifier* sopInstanceUID = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
+//     sopInstanceUID->putString("1.3.12.2.1107.5.4.3.33239335544320.20040721.153850.662");
+    
 //     DcmUniqueIdentifier* studyInstanceUID = new DcmUniqueIdentifier(DCM_StudyInstanceUID);
 //     studyInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814211218700000055");
-//     query.setQueryLevel(DcmQuery::IMAGE_LEVEL);
-//     DcmUniqueIdentifier* sopInstanceUID = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
 //     DcmUniqueIdentifier* seriesInstanceUID = new DcmUniqueIdentifier(DCM_SeriesInstanceUID);
-//     DcmIntegerString* numberOfInstace = new DcmIntegerString(DCM_NumberOfPatientRelatedInstances);
+//     seriesInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814230000000007368");    
+//     DcmUniqueIdentifier* sopInstanceUID = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
+//     sopInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814230000000007536");
+    
+    query.setQueryLevel(DcmQuery::STUDY_LEVEL);
+    
+    DcmIntegerString* numberOfInstace = new DcmIntegerString(DCM_NumberOfPatientRelatedInstances);
+    query.addKey(studyInstanceUID);
 //     query.addKey(seriesInstanceUID);
-//     query.addKey(studyInstanceUID);
 //     query.addKey(sopInstanceUID);
-//     query.addKey(numberOfInstace);
-//     Status status = scu.cfind_RQ(server, query, NULL);
+    query.addKey(numberOfInstace);
+    TaskFactory::newDcmSCPInstance(new DcmNetSCP(aet, "/home/freddy/tmp/move/"))->start();
+    for (int i = 0; i < 10000; i++);
+    Status status = scu.cmove_RQ(server, scu.getAET(), query, const_cast<char*>("/home/freddy/tmp/move/"));
+    
 //     
 //     delete studyInstanceUID;
 //     delete sopInstanceUID;
@@ -104,6 +125,9 @@ int main(int argc, char** argv)
 //     ASC_releaseAssociation(assoc); // release association
 //     ASC_destroyAssociation(&assoc); // delete assoc structure
 //     ASC_dropNetwork(&net); // delete net structure
-    DcmNetSCP server(DcmAET("COMMON", "localhost", 1111));
-    server.start();
+//     DcmNetSCP server(DcmAET("COMMON", "localhost", 1111));
+//     server.start();
+    
+    cout << status.message().c_str() << endl;
+    return app.exec();
 }

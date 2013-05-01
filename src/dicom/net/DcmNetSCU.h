@@ -8,7 +8,6 @@
 #include <dcmtk/dcmdata/dcxfer.h>
 #include <dcmtk/dcmnet/assoc.h>
 #include <dcmtk/ofstd/oflist.h>
-
 // Application Include
 #include <dicom/net/DcmAET.h>
 #include "DcmQuery.h"
@@ -45,7 +44,16 @@ public:
     Status cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int timeout = 0);
     Status cstore_RQ(DcmAET& remoteAet, const string& file, int timeout = 0);
     Status cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* proggres = NULL);
-    Status cmove_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* progress = NULL);
+    Status cmove_RQ(DcmAET& findAET, DcmAET& moveAET, 
+                    DcmQuery& query, 
+                    char* dirToSave,
+                    Callback<Progress>* progress = NULL);
+    void rejectAssoc(T_ASC_Association*& assoc,
+                     T_ASC_RejectParametersReason reason, 
+                     T_ASC_RejectParametersResult result,
+                     T_ASC_RejectParametersSource source);
+    
+    inline DcmAET& getAET() {return *(this->m_localAet);}
     virtual ~DcmNetSCU();
 };
 

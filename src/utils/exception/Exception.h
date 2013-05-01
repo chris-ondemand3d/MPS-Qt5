@@ -9,6 +9,8 @@ class Exception
 public:
     typedef enum {
         InvalidInteger,
+        CalledAETError,
+        WaitingMessageError,
     } ExcepType;
 protected:
     string m_message;

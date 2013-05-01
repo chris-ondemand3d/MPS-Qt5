@@ -1,0 +1,14 @@
+#include <tasks/Task.h>
+#include <tasks/DcmTask.h>
+#include <tasks/TaskDcmSCP.h>
+#include <tasks/TaskEchoSCP.h>
+#include <tasks/TaskEchoSCU.h>
+#include <tasks/TaskFactory.h>
+#include <tasks/TaskHandleRqDCMConn.h>
+#include <tasks/TaskManager.h>
+#include <tasks/TaskQRFindSCP.h>
+#include <tasks/TaskQRFindSCU.h>
+#include <tasks/TaskQRMoveSCP.h>
+#include <tasks/TaskQRMoveSCU.h>
+#include <tasks/TaskStoreSCP.h>
+#include <tasks/TaskStoreSCU.h>
