@@ -13,12 +13,19 @@
 #include <dcmtk/dcmdata/dcdeftag.h>
 #include <stdio.h>
 #include <tasks/tasks.h>
+#include <db/DBManager.h>
 
 
 using namespace std;
 
 int main(int argc, char** argv)
 {
+//     DBManager manager("mpsdb","localhost");
+//     DcmFileFormat f;
+//     f.loadFile("/home/freddy/XA.dcm");
+//     manager.store(f.getDataset());
+//     exit(0);
+    
     QApplication app(argc, argv);
     
 //     DcmAET server("COMMON", "localhost", 1111);
@@ -37,7 +44,6 @@ int main(int argc, char** argv)
 //     
 // //     Status status = scu.cstore_RQ(server, filename);
     DcmQuery query;
-    
     DcmUniqueIdentifier* studyInstanceUID = new DcmUniqueIdentifier(DCM_StudyInstanceUID);
     studyInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814211218700000055");
 //     DcmUniqueIdentifier* seriesInstanceUID = new DcmUniqueIdentifier(DCM_SeriesInstanceUID);
@@ -128,6 +134,6 @@ int main(int argc, char** argv)
 //     DcmNetSCP server(DcmAET("COMMON", "localhost", 1111));
 //     server.start();
     
-    cout << status.message().c_str() << endl;
+//     cout << status.message().c_str() << endl;
     return app.exec();
 }

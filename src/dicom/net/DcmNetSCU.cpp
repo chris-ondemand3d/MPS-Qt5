@@ -39,11 +39,6 @@ Status DcmNetSCU::cecho_RQ(DcmAET& remoteAet, int timeout)
                                    ((const char**)(tsList)),
                                    TransferSyntax::instance()->count()
                                   );
-
-        for (int i = 0; i < TransferSyntax::instance()->count(); i++)
-        {
-            cout << tsList[i] << endl;
-        }
         // Request DICOM Association
         T_ASC_Association* assoc;
         if ((cond = ASC_requestAssociation(network, params, &assoc)).good())

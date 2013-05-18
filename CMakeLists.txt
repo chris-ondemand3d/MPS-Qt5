@@ -12,6 +12,10 @@ find_package(Qt5Widgets)
 
 add_executable(
 mps-qt5 
+src/settings/MPSSystemSettings.cpp 
+src/db/DBQuery.cpp 
+src/db/DBDcmTagTable.cpp 
+src/db/DBManager.cpp 
 src/tasks/TaskDcmSCP.cpp 
 src/utils/exception/WaitingMessageErrorExcep.cpp 
 src/dicom/net/DIMSEMessajeFactory.cpp 
@@ -68,8 +72,10 @@ target_link_libraries(  mps-qt5
                         
                         # BOOS LIBRARIES
                         /usr/lib/libboost_system.so
-                        /usr/lib/libboost_date_time.so
-                        /usr/lib/libboost_thread.so
+			/usr/lib/libboost_thread.so
+			/usr/lib/libboost_filesystem.so
+			/usr/lib/libmongoclient.a
+			/usr/lib/libpthread.so
                         
                         libpthread.so
                         libz.so
@@ -80,6 +86,8 @@ qt5_use_modules(mps-qt5 Widgets Core)
 include_directories(
 ./src 
 ~/.local/include/
+${Qt5Widgets_INCLUDE_DIRS}
+${Qt5Core_INCLUDE_DIRS}
 )
 
 add_subdirectory(src)

@@ -22,6 +22,7 @@ public:
         CMoveRQError,
         CMoveRSPError,
         TaskError,
+        MongoDBError,
     } OperationResult;
 private:
     OperationResult m_status;

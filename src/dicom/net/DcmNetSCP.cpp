@@ -59,7 +59,10 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             
             // saving the file
             DcmFileFormat* dcmFile = new DcmFileFormat(ds);
-            ds->saveFile((this->m_rootFolder.c_str() + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());
+            char* filename = strdup((this->m_rootFolder.c_str() + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());
+            ds->saveFile(filename);
+            Singleton<SystemManager>::instance()->mpsSystem()->dbManager()->store(ds, filename);
+            delete filename;
             delete ds;
             T_DIMSE_Message rsp;
             DIMSEMessajeFactory::newCStoreRSP(&rsp, 
