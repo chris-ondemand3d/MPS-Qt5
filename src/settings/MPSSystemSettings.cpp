@@ -4,6 +4,7 @@
 
 #include "MPSSystemSettings.h"
 #include <system/MPSSystem.h>
+#include <dicom/net/DcmAET.h>
 
 
 MPSSystemSettings::MPSSystemSettings()
@@ -11,9 +12,24 @@ MPSSystemSettings::MPSSystemSettings()
     this->m_systemSettings = new QSettings("HealthSoft", "MPS");
 }
 
-bool MPSSystemSettings::existRemoteAET(char* aet)
+bool MPSSystemSettings::existRemoteAET(char* aet, char* hostname)
 {
-    return this->m_systemSettings->contains(QString(MPSSetting_REMOTE_AET_GROUP) + "/" + QString(aet));
+    QString aetSetting((MPSSetting_REMOTE_AET_GROUP) + "/" + QString(aet));
+    string aetValue, hostnameValue;
+    int portValue;
+    if (this->m_systemSettings->contains(aetSetting))
+    {
+        char* aetSettingValue = strdup(this->m_systemSettings->value(aetSetting).toString().toStdString().c_str());
+        if (DcmAET::validateAetSettingValue(aetSettingValue,
+                                            aetValue,
+                                            hostnameValue,
+                                            portValue) &&
+           hostnameValue == string(hostname))
+            return true;
+            
+    }
+    
+    return false;
 }
 
 

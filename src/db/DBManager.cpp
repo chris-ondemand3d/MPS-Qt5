@@ -213,6 +213,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
             {
                 if (multiplicity == 1)
                 {
+                    
                     int value;
                     if (elem->getSint32(value).good())
                         *builderBSO << elem->getTag().toString().c_str() << value;

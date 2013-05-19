@@ -9,6 +9,7 @@
 #include <utils/Singleton.h>
 #include <QDir>
 
+
 #ifndef Settings_Defined
 #define Settings_Defined                        true
     #define MPSSetting_LOCAL_AET_GROUP          QString("local-AET")
@@ -38,7 +39,7 @@ public:
     QVariant value(const QString& keySetting);
     bool hasSetting(const QString& keySetting);
     bool insertRemoteAET(QString& aet, QString& hostname, int port);
-    bool existRemoteAET(char* aet);
+    bool existRemoteAET(char* aet, char* hostname);
     inline QSettings* settings() {return this->m_systemSettings;}
     ~MPSSystemSettings();
 };

@@ -216,7 +216,9 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         
         // Checking that the calling AET has permission to communicate with our server
         MPSSystemSettings* systemSettings = Singleton<SystemManager>::instance()->mpsSystem()->settings();
-        if (!systemSettings->existRemoteAET(assoc->params->DULparams.callingAPTitle))
+        DUL_ASSOCIATESERVICEPARAMETERS* dulAssParams = &(assoc->params->DULparams);
+        
+        if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle, dulAssParams->callingPresentationAddress))
         {
             T_ASC_RejectParameters rejParams;            
             rejParams.reason = ASC_REASON_SU_CALLEDAETITLENOTRECOGNIZED;
