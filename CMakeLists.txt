@@ -13,7 +13,6 @@ find_package(Qt5Widgets)
 add_executable(
 mps-qt5 
 src/settings/MPSSystemSettings.cpp 
-src/db/DBQuery.cpp 
 src/db/DBDcmTagTable.cpp 
 src/db/DBManager.cpp 
 src/tasks/TaskDcmSCP.cpp 

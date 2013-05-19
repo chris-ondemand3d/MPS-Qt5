@@ -16,8 +16,11 @@
 #include <tasks/TaskHandleRqDCMConn.h>
 #include <utils/exception/exceptions.h>
 #include <dicom/net/DIMSEMessajeFactory.h>
+#include <settings/MPSSystemSettings.h>
+
 
 using namespace std;
+
 
 
 class DcmNetSCP
@@ -30,9 +33,11 @@ protected:
     
     void acceptingPresentationContext(T_ASC_Association* assoc);
     Status receiveCommand(T_ASC_Association* assoc, T_DIMSE_Message& message);
+    void loadSettings();
+    void saveSettings();
     
 public:
-    DcmNetSCP(const DcmAET& aet, string rootFolder);
+    DcmNetSCP();
     void start();
     void handleIncomingConnection(T_ASC_Network* network, T_ASC_Association* assoc);
     Status cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);

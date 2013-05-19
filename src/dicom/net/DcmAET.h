@@ -18,6 +18,7 @@ private:
 public:
     DcmAET(const string& aet, const string& hostname, int port);
     DcmAET(const DcmAET& aet);
+    DcmAET();
     inline void setAet(const string& aet){this->m_aet = aet;}
     inline void setHostname(const string& hostname) {this->m_hostname = hostname;}
     void setPort(int port) {this->m_port = port;}
@@ -25,6 +26,11 @@ public:
     string hostname() {return this->m_hostname;}
     int port() {return this->m_port;}
     void print();
+    static bool validateAetSettingValue(char* aetSettingVal, 
+                                        string& aetVal, 
+                                        string& hostVal,
+                                        int& portVal);
+    string toString();
     virtual ~DcmAET(){};
 };
 

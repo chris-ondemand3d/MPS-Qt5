@@ -29,22 +29,11 @@ private:
     mongo::HostAndPort* m_mongoServer;
     bool m_isConnected;
     string m_dbName;
-    /*
-     * This method fill the data for BSONObjBuilder corresponding to
-     * Patient, Study, Series or Instance level.
-     */
-    void insertData(const mongo::BSONObjBuilder& builder);
-    mongo::BSONObjBuilder* buildDICOMStructure(mongo::BSONObjBuilder& patient,
-                                               mongo::BSONObjBuilder& study,
-                                               mongo::BSONObjBuilder& series,
-                                               mongo::BSONObjBuilder& instance,
-                                               OFString& studyInstanceUID,
-                                               OFString& seriesInstanceUID,
-                                               OFString& sopInstanceUID);
-    string buildUID4BSON(OFString& uid, DcmQuery::QueryLevel level); 
+
+    void loadSettings();
     
 public:
-    DBManager(const string& dbName, const string& host , int port = 27017);
+    DBManager();
     bool findSOPInstanceUID(OFString& studyInstanceUID, OFString& seriesInstanceUID, OFString& sopInstanceUID);
     bool findSeries(OFString& studyInstanceUID, OFString& seriesInstanceUID);
     bool findStudy(OFString& studyInstanceUID);

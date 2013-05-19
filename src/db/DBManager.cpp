@@ -1,15 +1,15 @@
 
 #include "DBManager.h"
 #include "DBDcmTagTable.h"
+#include <settings/MPSSystemSettings.h>
 #include <dcmtk/dcmdata/dcelem.h>
-#include <db/DBQuery.h>
 
-DBManager::DBManager(const string& dbName, const string& host, int port)
+
+DBManager::DBManager()
 {
-    this->m_mongoConn = NULL;
-    this->m_dbName = dbName;
+    // const string& dbName, const string& host , int port = 27017
     this->m_isConnected = false;
-    this->m_mongoServer = new mongo::HostAndPort(host, port);
+    this->loadSettings();
 }
 
 
@@ -379,63 +379,53 @@ void DBManager::runMongoFunction(string mongoFunction, mongo::BSONArray& funcPar
 }
 
 
-mongo::BSONObjBuilder* DBManager::buildDICOMStructure(mongo::BSONObjBuilder& patient, 
-                                                      mongo::BSONObjBuilder& study, 
-                                                      mongo::BSONObjBuilder& series, 
-                                                      mongo::BSONObjBuilder& instance,
-                                                      OFString& studyInstanceUID,
-                                                      OFString& seriesInstanceUID,
-                                                      OFString& sopInstanceUID)
-{
-    mongo::BSONObjBuilder* result = &patient; 
-    
-    mongo::StringData sopInstUID(this->buildUID4BSON(sopInstanceUID, DcmQuery::IMAGE_LEVEL));
-    mongo::StringData seriesInstUID(this->buildUID4BSON(seriesInstanceUID, DcmQuery::SERIES_LEVEL));
-    mongo::StringData studyInstUID(this->buildUID4BSON(studyInstanceUID, DcmQuery::STUDY_LEVEL));
-    
-    series.append(sopInstUID, instance.obj());
-    study.append(seriesInstUID, series.obj());
-    patient.append(studyInstUID, study.obj());
-    
-    return result;
-}
 
-string DBManager::buildUID4BSON(OFString& uid, DcmQuery::QueryLevel level)
+
+
+void DBManager::loadSettings()
 {
-    string result;
-    switch(level)
+    MPSSystemSettings* settings = Singleton<MPSSystemSettings>::instance();
+//     const string& dbName, const string& host , int port = 27017
+    string dbHostname;
+    int port;
+    
+    if (settings->hasSetting(MPSSetting_MONGODB_DBNAME))
+        this->m_dbName = settings->value(MPSSetting_MONGODB_DBNAME).toString().toStdString();
+    else
     {
-        case DcmQuery::STUDY_LEVEL:
+        this->m_dbName = "mpsdb";
+        settings->settings()->setValue(MPSSetting_MONGODB_DBNAME, "mpsdb");
+        settings->settings()->sync();
+    }
+    
+    if (settings->hasSetting(MPSSetting_MONGODB_HOST))
+        dbHostname = settings->value(MPSSetting_MONGODB_HOST).toString().toStdString();
+    else
+    {
+        dbHostname = "localhost";
+        settings->settings()->setValue(MPSSetting_MONGODB_HOST, "localhost");
+        settings->settings()->sync();
+    }
+    
+    if (settings->hasSetting(MPSSetting_MONGODB_PORT))
+    {
+        bool retValue;
+        port = settings->value(MPSSetting_MONGODB_PORT).toInt(&retValue);
+        if (port <= 0 || !retValue)
         {
-            result += "STUDY_";
-            break;
-        }
-        case DcmQuery::SERIES_LEVEL:
-        {
-            result += "SERIES_";
-            break;
-        }
-        case DcmQuery::IMAGE_LEVEL:
-        {
-            result += "INSTANCE_";
-            break;
-        }
-        case DcmQuery::PATIENT_LEVEL:
-        {
-            // TODO: Error. Patient dosn't have any UID.
-            return result;
+            port = 27017;
+            settings->settings()->setValue(MPSSetting_MONGODB_PORT, port);
+            settings->settings()->sync();
         }
     }
-    for (int i = 0, length = uid.length(); i < length; i++)
-        result += uid[i] == '.' ? '_' : uid[i];
+    else
+    {
+        port = 27017;
+        settings->settings()->setValue(MPSSetting_MONGODB_PORT, port);
+        settings->settings()->sync();
+    }
     
-    return result;
-}
-
-
-void DBManager::insertData(const mongo::BSONObjBuilder& builder)
-{
-
+    this->m_mongoServer = new mongo::HostAndPort(dbHostname, port);
 }
 
 

@@ -45,8 +45,7 @@ public:
     Status cstore_RQ(DcmAET& remoteAet, const string& file, int timeout = 0);
     Status cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* proggres = NULL);
     Status cmove_RQ(DcmAET& findAET, DcmAET& moveAET, 
-                    DcmQuery& query, 
-                    char* dirToSave,
+                    DcmQuery& query,
                     Callback<Progress>* progress = NULL);
     void rejectAssoc(T_ASC_Association*& assoc,
                      T_ASC_RejectParametersReason reason, 

@@ -523,11 +523,7 @@ Status DcmNetSCU::cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress
     return status;
 }
 
-Status DcmNetSCU::cmove_RQ(DcmAET& findAET, 
-                           DcmAET& moveAET, 
-                           DcmQuery& query, 
-                           char* dirToSave, 
-                           Callback< Progress >* progress)
+Status DcmNetSCU::cmove_RQ(DcmAET& findAET, DcmAET& moveAET, DcmQuery& query, Callback< Progress >* progress)
 {
     OFCondition cond;
     Status status;
@@ -551,7 +547,7 @@ Status DcmNetSCU::cmove_RQ(DcmAET& findAET,
         ASC_addPresentationContext(params, 1, UID_MOVEPatientRootQueryRetrieveInformationModel, (const char**)tsList, 1);
         ASC_addPresentationContext(params, 3, UID_MOVEStudyRootQueryRetrieveInformationModel, (const char**)tsList, 1);
         
-        T_ASC_Association* assoc;        
+        T_ASC_Association* assoc;
         if ((cond = ASC_requestAssociation(network, params, &assoc)).good())
         {
             // association success.

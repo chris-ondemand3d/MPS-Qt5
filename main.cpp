@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QSettings>
 #include <dicom/net/DcmAET.h>
 #include <dicom/net/DcmNetSCU.h>
 #include <utils/filesystem/FilesManager.h>
@@ -14,23 +15,36 @@
 #include <stdio.h>
 #include <tasks/tasks.h>
 #include <db/DBManager.h>
+#include <QCryptographicHash>
 
 
 using namespace std;
 
 int main(int argc, char** argv)
 {
+    
 //     DBManager manager("mpsdb","localhost");
 //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA.dcm");
 //     manager.store(f.getDataset());
+    T_ASC_Association k;
+    DcmAET server1("COMMON", "localhost", 1111);
+    DcmAET server("DCM4CHEE", "localhost", 11112);
+//     cout << QDir::homePath().toStdString();
+//     DcmNetSCP();
+//     Singleton<SystemManager>::instance()->registerRemoteDcmAET(server);
+//     Singleton<SystemManager>::instance()->registerRemoteDcmAET(server1);
 //     exit(0);
+//     QCryptographicHash md5sum(QCryptographicHash::Md5);
+//     QString datetime = QDateTime::currentDateTime().toString(Qt::ISODate);
+//     md5sum.addData(datetime.toLocal8Bit().data(), datetime.size());
+//     cout << QString(md5sum.result().toHex()).toStdString() << endl << datetime.toStdString();
+//     exit(0);
+    
     
     QApplication app(argc, argv);
     
-//     DcmAET server("COMMON", "localhost", 1111);
-    DcmAET server("DCM4CHEE", "localhost", 11112);
-    DcmAET aet("IMAGIS", "localhost", 55555);
+    DcmAET aet("MPS", "localhost", 55555);
 
     DcmNetSCU scu(aet);
 //     QString msg;
@@ -65,9 +79,9 @@ int main(int argc, char** argv)
 //     query.addKey(seriesInstanceUID);
 //     query.addKey(sopInstanceUID);
     query.addKey(numberOfInstace);
-    TaskFactory::newDcmSCPInstance(new DcmNetSCP(aet, "/home/freddy/tmp/move/"))->start();
+    TaskFactory::newDcmSCPInstance(new DcmNetSCP())->start();
     for (int i = 0; i < 10000; i++);
-    Status status = scu.cmove_RQ(server, scu.getAET(), query, const_cast<char*>("/home/freddy/tmp/move/"));
+    Status status = scu.cmove_RQ(server, scu.getAET(), query);
     
 //     
 //     delete studyInstanceUID;

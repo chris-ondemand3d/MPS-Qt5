@@ -3,6 +3,7 @@
 
 #include <utils/Singleton.h>
 #include <system/MPSSystem.h>
+#include <dicom/net/DcmAET.h>
 
 class MPSSystem;
 
@@ -15,6 +16,7 @@ private:
     
 public:
     inline MPSSystem* mpsSystem() {return this->m_system;}
+    bool registerRemoteDcmAET(DcmAET& remoteAET);
     ~SystemManager();
 };
 

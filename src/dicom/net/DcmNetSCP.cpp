@@ -1,13 +1,79 @@
 #include "DcmNetSCP.h"
+#include <QCryptographicHash>
 
 
 
 
-DcmNetSCP::DcmNetSCP ( const DcmAET& aet, string rootFolder ) : m_aet(aet)
+DcmNetSCP::DcmNetSCP ()
 {
+    this->loadSettings();
     this->m_stop = false;
-    this->m_rootFolder = rootFolder;
 }
+
+void DcmNetSCP::loadSettings()
+{
+    // the AET setting is saved like: aet=aet@localhost:port
+    MPSSystemSettings* setting = Singleton<MPSSystemSettings>::instance()->instance();
+    string aet, hostname;
+    bool valResult;
+    int port;
+    
+    if (setting->hasSetting(MPSSetting_LOCAL_AET))
+        this->m_aet.setAet(setting->value(MPSSetting_LOCAL_AET).toString().toStdString());
+    else
+    {
+        setting->settings()->setValue(MPSSetting_LOCAL_AET, "MPS");
+        this->m_aet.setAet("MPS");
+        setting->settings()->sync();
+    }
+    
+    if (setting->hasSetting(MPSSetting_LOCAL_HOSTNAME))
+        this->m_aet.setHostname(setting->value(MPSSetting_LOCAL_HOSTNAME).toString().toStdString());
+    else
+    {
+        setting->settings()->setValue(MPSSetting_LOCAL_HOSTNAME, "localhost");
+        this->m_aet.setHostname("localhost");
+        setting->settings()->sync();
+    }
+    
+    if (setting->hasSetting(MPSSetting_LOCAL_PORT))
+    {
+        port = setting->value(MPSSetting_LOCAL_PORT).toInt(&valResult);
+        if (port <= 0 && !valResult)
+        {
+            port = 1104;
+            setting->settings()->setValue(MPSSetting_LOCAL_PORT, 1104);
+            setting->settings()->sync();
+        }        
+        this->m_aet.setPort(port);
+    }
+    else
+    {
+        port = 1104;
+        setting->settings()->setValue(MPSSetting_LOCAL_PORT, 1104);
+        setting->settings()->sync();
+    }   
+    
+    if (setting->hasSetting(MPSSetting_LOCAL_SCP_FOLDER))
+        this->m_rootFolder = setting->value(MPSSetting_LOCAL_SCP_FOLDER).toString().toStdString();
+    else
+    {
+        QCryptographicHash md5sum(QCryptographicHash::Md5);
+        QString datetime = QDateTime::currentDateTime().toString(Qt::ISODate);
+        md5sum.addData(datetime.toStdString().c_str(), datetime.size());
+        QString homeFolder = QDir::homePath() + QDir::separator() + QString("MPS") + md5sum.result().toHex();
+        QDir::home().mkdir(homeFolder);
+        this->m_rootFolder = homeFolder.toStdString();
+        setting->settings()->setValue(MPSSetting_LOCAL_SCP_FOLDER, this->m_rootFolder.c_str());
+        setting->settings()->sync();
+    }
+}
+
+void DcmNetSCP::saveSettings()
+{
+
+}
+
 
 Status DcmNetSCP::cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
@@ -147,7 +213,20 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
     // Checking that called AET is correct
     if (strcmp(assoc->params->DULparams.calledAPTitle, this->m_aet.aet().c_str()) == 0)
     {
-        // TODO: Checking that the calling AET has permission to communicate with our server
+        
+        // Checking that the calling AET has permission to communicate with our server
+        MPSSystemSettings* systemSettings = Singleton<SystemManager>::instance()->mpsSystem()->settings();
+        if (!systemSettings->existRemoteAET(assoc->params->DULparams.callingAPTitle))
+        {
+            T_ASC_RejectParameters rejParams;            
+            rejParams.reason = ASC_REASON_SU_CALLEDAETITLENOTRECOGNIZED;
+            rejParams.result = ASC_RESULT_REJECTEDPERMANENT;
+            rejParams.source = ASC_SOURCE_SERVICEPROVIDER_ACSE_RELATED;
+            ASC_rejectAssociation(assoc, &rejParams);
+            ASC_dropSCPAssociation(assoc);
+            DUL_ASSOCIATESERVICEPARAMETERS k = assoc->params->DULparams;
+            return;
+        }    
         
         // Everything is fine
         this->acceptingPresentationContext(assoc);
@@ -161,6 +240,7 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         
         while(true)
         {
+            
             cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 10, &idPC, &msgRQ, NULL, NULL);
             switch(cond.code())
             {

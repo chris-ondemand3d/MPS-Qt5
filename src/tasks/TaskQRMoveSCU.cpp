@@ -13,8 +13,9 @@ TaskQRMoveSCU::TaskQRMoveSCU(DcmNetSCU* scu, DcmAET* findAET, DcmAET* moveAET,
 
 void TaskQRMoveSCU::run()
 {
-    this->m_scu->cmove_RQ(*(this->m_findAET), *(this->m_moveAET),
-                          *(this->m_query), this->m_saveFolder);
+    this->m_scu->cmove_RQ(*(this->m_findAET), 
+                          *(this->m_moveAET),
+                          *(this->m_query));
 }
 
 TaskQRMoveSCU::~TaskQRMoveSCU()
