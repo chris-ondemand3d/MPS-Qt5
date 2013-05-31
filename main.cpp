@@ -27,7 +27,6 @@ int main(int argc, char** argv)
 //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA.dcm");
 //     manager.store(f.getDataset());
-    T_ASC_Association k;
     DcmAET server1("COMMON", "localhost", 1111);
     DcmAET server("DCM4CHEE", "localhost", 11112);
 //     cout << QDir::homePath().toStdString();

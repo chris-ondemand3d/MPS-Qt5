@@ -22,6 +22,7 @@ void TaskManager::removeTask()
 //             task->exit(1);
         delete task;
     }
+    cout << "tarea eliminada" << endl; 
 }
 
 Status TaskManager::runTask(TaskID taskID)

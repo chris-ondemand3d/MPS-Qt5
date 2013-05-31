@@ -50,14 +50,18 @@ void DBManager::store(DcmDataset* ds, char* fileName)
     mongo::BSONObjBuilder patientBSONBuilder, studyBSONBuilder, 
                           seriesBSONBuilder, instanceBSONBuilder,
                           *builderBSO;
-    mongo::BSONObjBuilder();
     int card = ds->card();
     DBDcmTagTable* tagTableInstance = Singleton<DBDcmTagTable>::instance();
-    
+    BSONObjBuilder* data;
+    DcmVR elemVR;
     for (int i = 0; i < card; i++)
     {
+        data = new BSONObjBuilder();
         DcmElement* elem = ds->getElement(i);
         int multiplicity = elem->getVM();
+        elemVR.setVR(elem->getVR());
+        *data << MONGO_TAG_VR << elemVR.getValidVRName();
+        *data << MONGO_TAG_VM << multiplicity;
         
         // detecting the tag level and getting the corresponding BSONObjBuilder
         switch(tagTableInstance->getTagLevel(QString(elem->getTag().toString().c_str())))
@@ -90,8 +94,9 @@ void DBManager::store(DcmDataset* ds, char* fileName)
             {
                 // checking multiplicity
                 if (multiplicity == 1)
-                    *builderBSO << elem->getTag().toString().c_str() << elem->getTag().toString().c_str();
-                else
+                    *data << MONGO_TAG_VALUE << elem->getTag().toString().c_str();
+                    
+                else if (multiplicity > 1)
                 {
                     OFString values;
                     string singleValue;
@@ -106,8 +111,9 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                         else
                             singleValue += values[i];
                     }
-                    *builderBSO << elem->getTag().toString().c_str() << bsonValues;
+                    *data << MONGO_TAG_VALUE << bsonValues;
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -128,32 +134,35 @@ void DBManager::store(DcmDataset* ds, char* fileName)
             case EVR_UI:
             {
                 char* value;
-                if (elem->getString(value).bad())
-                    break;
-                
-                if (multiplicity == 1)
-                    *builderBSO << elem->getTag().toString().c_str() << value;           
-                                    
-                else if (multiplicity > 1)
+                if (elem->getString(value).good())
                 {
-                    set<string> bsonValues;
-                    string singleValue;
-                    int length = strlen(value);
-                    for (int i = 0; i < length; i++)
-                    {
-                        if (value[i] == '\\')
+                    if (multiplicity == 1)
+                        *data << MONGO_TAG_VALUE << value;
+                    else if (multiplicity > 1)
+                    {   
+                        list<string> bsonValues;
+                        string singleValue;
+                        int length = strlen(value);
+                        for (int i = 0; i < length; i++)
                         {
-                            bsonValues.insert(singleValue);
-                            singleValue.clear();;
+                            if (value[i] == '\\')
+                            {
+                                bsonValues.push_back(singleValue);
+                                singleValue.clear();
+                            }
+                            else
+                            {
+                                singleValue += value[i];
+                            }
                         }
-                        else
-                        {
-                            singleValue += value[i];
-                        }
+                        bsonValues.push_back(singleValue);
+                        *data << MONGO_TAG_VALUE << bsonValues;
                     }
-                    
-                    *builderBSO << elem->getTag().toString().c_str() << bsonValues;
                 }
+                else
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -162,10 +171,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                 if (multiplicity == 1)
                 {
                     double value;
-                    if (elem->getFloat64(value).bad())
-                        break;
-                    
-                    *builderBSO << elem->getTag().toString().c_str() << value;
+                    *data << MONGO_TAG_VALUE << (elem->getFloat64(value).good() ? value : mongo::jstNULL);
                 }
                 
                 else if (multiplicity > 1)
@@ -174,13 +180,15 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                     double* values;
                     
                     if (elem->getFloat64Array(values).bad())
-                        break;
-                    
-                    for (int i = 0; i < multiplicity; i++)
-                        bsonValues.insert(values[i]);
-                    
-                    *builderBSO << elem->getTag().toString().c_str();
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                    else
+                    {
+                        for (int i = 0; i < multiplicity; i++)
+                            bsonValues.insert(values[i]);
+                        *data << MONGO_TAG_VALUE << bsonValues;
+                    }
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -189,8 +197,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                 if (multiplicity == 1)
                 {
                     float value;
-                    if (elem->getFloat32(value).good())
-                        *builderBSO << elem->getTag().toString().c_str() << value;
+                    *data << MONGO_TAG_VALUE << (elem->getFloat32(value).good() ? value : mongo::jstNULL);
                 }
                 
                 else if (multiplicity > 1)
@@ -199,13 +206,16 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                     float* values;
                     
                     if (elem->getFloat32Array(values).bad())
-                        break;
-                    
-                    for (int i = 0; i < multiplicity; i++)
-                        bsonValues.insert(values[i]);
-                    
-                    *builderBSO << elem->getTag().toString().c_str();
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                    else
+                    {
+                        for (int i = 0; i < multiplicity; i++)
+                            bsonValues.insert(values[i]);
+                        
+                        *data << MONGO_TAG_VALUE << bsonValues;
+                    }
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -215,8 +225,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                 {
                     
                     int value;
-                    if (elem->getSint32(value).good())
-                        *builderBSO << elem->getTag().toString().c_str() << value;
+                    *data << MONGO_TAG_VALUE << (elem->getSint32(value).good() ? value : mongo::jstNULL);
                 }
                 else if (multiplicity > 1)
                 {
@@ -227,9 +236,12 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                         for (int i = 0; i < multiplicity; i++)
                             bsonValues.insert(values[i]);
                         
-                        *builderBSO << elem->getTag().toString().c_str() << bsonValues;
+                        *data << MONGO_TAG_VALUE << bsonValues;
                     }                            
+                    else
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -237,24 +249,26 @@ void DBManager::store(DcmDataset* ds, char* fileName)
             {
                 if (multiplicity == 1)
                 {
-                    float value;
-                    if (elem->getFloat32(value).good())
-                        *builderBSO << elem->getTag().toString().c_str() << value;
+                    short value;
+                    *data << MONGO_TAG_VALUE << (elem->getSint16(value).good() ? value : mongo::jstNULL);
                 }
                 
                 else if (multiplicity > 1)
                 {
-                    set<float> bsonValues;
-                    float* values;
+                    set<short> bsonValues;
+                    short* values;
                     
-                    if (elem->getFloat32Array(values).bad())
-                        break;
-                    
-                    for (int i = 0; i < multiplicity; i++)
-                        bsonValues.insert(values[i]);
-                    
-                    *builderBSO << elem->getTag().toString().c_str();
+                    if (elem->getSint16Array(values).good())
+                    {
+                        for (int i = 0; i < multiplicity; i++)
+                            bsonValues.insert(values[i]);
+                        
+                        *data << MONGO_TAG_VALUE << bsonValues;
+                    }
+                    else
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -264,8 +278,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                 if (multiplicity == 1)
                 {
                     unsigned int value;
-                    if (elem->getUint32(value).good())
-                        *builderBSO << elem->getTag().toString().c_str() << value;
+                    *data << MONGO_TAG_VALUE << (elem->getUint32(value).good() ? value : mongo::jstNULL);
                 }
                 else if (multiplicity > 1)
                 {
@@ -276,9 +289,12 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                         for (int i = 0; i < multiplicity; i++)
                             bsonValues.insert(values[i]);
                         
-                        *builderBSO << elem->getTag().toString().c_str() << bsonValues;
-                    }                            
+                        *data << MONGO_TAG_VALUE << bsonValues;
+                    }       
+                    else
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
             
@@ -287,8 +303,7 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                 if (multiplicity == 1)
                 {
                     unsigned short value;
-                    if (elem->getUint16(value).good())
-                        *builderBSO << elem->getTag().toString().c_str() << value;
+                    *data << MONGO_TAG_VALUE << (elem->getUint16(value).good() ? value : mongo::jstNULL);
                 }
                 else if (multiplicity > 1)
                 {
@@ -299,70 +314,36 @@ void DBManager::store(DcmDataset* ds, char* fileName)
                         for (int i = 0; i < multiplicity; i++)
                             bsonValues.insert(values[i]);
                         
-                        *builderBSO << elem->getTag().toString().c_str() << bsonValues;
-                    }                            
+                        *data << MONGO_TAG_VALUE << bsonValues;
+                    }
+                    else
+                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
                 }
+                *builderBSO << elem->getTag().toString().c_str() << data->obj();
                 break;
             }
         }
+        delete data;
     }
     
     // Inseting data in DB
     // getting Study Instance UID, Series Instance UID and SOP Instance UID
     // to search in data base.
+    
     OFString studyInstanceUID, seriesInstanceUID, sopInstanceUID;
     ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
     ds->findAndGetOFString(DCM_SeriesInstanceUID, seriesInstanceUID);
     ds->findAndGetOFString(DCM_StudyInstanceUID, studyInstanceUID);
     instanceBSONBuilder << "filename" << fileName;
     
-    list<BSONObj> studies, series, instances;
-    
-    instances.push_front(instanceBSONBuilder.obj());
-    seriesBSONBuilder.append("instances", instances);
-    series.push_front(seriesBSONBuilder.obj());
-    studyBSONBuilder.append("series", series);    
-    studies.push_front(studyBSONBuilder.obj());
-    patientBSONBuilder.append("studies", studies);
-    
     mongo::BSONObj obj = patientBSONBuilder.done();
-    mongo::BSONArray params = BSON_ARRAY(obj);
-    this->runMongoFunction(MONGO_FUNC_insertInstance, params);
-//     this->openConnection();
-//     string systemJSColl = this->m_dbName + ".system.js";
-//     BSONObj ret = BSON("value" << 1), result, info;
-//     result = this->m_mongoConn->findOne(systemJSColl, QUERY("_id" << MONGO_FUNC_insertInstance),&ret);
-// 
-//     BSONObj query = BSON("eval" << result["value"].jsonString(mongo::JS,false) << "args" << BSON_ARRAY(obj));
-//     this->m_mongoConn->runCommand(this->m_dbName, query,info);
     
-//     cout << obj.extractFieldsUnDotted(BSON("studies.series.(0008,0060)" << "US")).toString().c_str() << endl;
-//     conn.insert("mydb.test", obj);
-//     conn.update("mydb.test", QUERY("_id" << 1.0), BSON("$set" << BSON("name.first" << "Nuevo Nombre")));
-//     exit(0);
+    BSONArray params = BSON_ARRAY(patientBSONBuilder.done() << 
+                                  studyBSONBuilder.done() << 
+                                  seriesBSONBuilder.done() <<
+                                  instanceBSONBuilder.done());
     
-//     string sopInstUID(this->buildUID4BSON(sopInstanceUID, DcmQuery::IMAGE_LEVEL));
-//     string seriesInstUID(this->buildUID4BSON(seriesInstanceUID, DcmQuery::SERIES_LEVEL));
-//     string studyInstUID(this->buildUID4BSON(studyInstanceUID, DcmQuery::STUDY_LEVEL));
-    
-    
-    
-    
-//     seriesBSONBuilder << "instances" << instances;
-//     studyBSONBuilder << "series" << series;
-//     cout << "studies: " << studyBSONBuilder.obj().toString().c_str() << endl;
-    
-//     cout << patientBSONBuilder.obj().toString().c_str() << endl;
-//     this->openConnection();
-//     BSONObj info;
-//     BSONElement ret;
-//     BSONElement objFunc = conn.query("mydb.system.js")->next()["value"];
-//     BSONObj args = BSON("SOPInstancesUID" << "1.2.276.0.7230010.3.1.4.504029059.8938.1358779961.300967");
-//     BSONObj func = BSON("eval" << objFunc.jsonString(mongo::JS, false)<<"args" << BSON_ARRAY("1.2.276.0.7230010.3.1.4.504029059.8938.1358779961.300967"));
-// //     conn.eval("mydb.test", "function (SOPInstanceUID) {var cursor = db.test.find({'studies.series.instances.(0008,0018)' : SOPInstanceUID});return cursor.hasNext();}");
-//     BSONObj func3 = conn.findOne("db.system.js", QUERY("_id" << "findSOPInstanceUID"));
-//     BSONObj func2 = BSON("eval" << func3["value"].str() << "args" << BSON_ARRAY("1.2.276.0.7230010.3.1.4.504029059.8938.1358779961.300967"));
-
+    this->runMongoFunction(MONGO_FUNC_insertInstance, params);    
 }
 
 void DBManager::runMongoFunction(string mongoFunction, mongo::BSONArray& funcParams)
@@ -376,7 +357,7 @@ void DBManager::runMongoFunction(string mongoFunction, mongo::BSONArray& funcPar
         return;
    
     BSONObj query = BSON("eval" << result["value"].jsonString(mongo::JS,false) << "args" << funcParams);
-    this->m_mongoConn->runCommand(this->m_dbName, query,info);
+    this->m_mongoConn->runCommand(this->m_dbName, query, info);    
 }
 
 

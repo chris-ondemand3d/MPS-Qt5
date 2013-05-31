@@ -78,17 +78,26 @@ void DcmNetSCP::saveSettings()
 Status DcmNetSCP::cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
     // Sending response
+    cout << "entre a echo scu" << endl;
     T_DIMSE_Message rspMsg;
     Status result;
     
-    if ((result = DIMSEMessajeFactory::newCEchosRSP(&rspMsg, assoc->nextMsgID)).good())
-        DIMSE_sendMessageUsingMemoryData(assoc, idPC, &rspMsg, NULL, NULL, NULL, NULL);
+    if (DIMSE_receiveCommand(assoc, DIMSE_BLOCKING, 5, &idPC, &rspMsg, NULL, NULL).bad())
+        ASC_abortAssociation(assoc);
+    else
+    {
+        cout << "comando recibido" << endl;
+        if ((result = DIMSEMessajeFactory::newCEchosRSP(&rspMsg, assoc->nextMsgID)).good())
+            DIMSE_sendMessageUsingMemoryData(assoc, idPC, &rspMsg, NULL, NULL, NULL, NULL);
+    }    
+    
     return result;
 }
 
 Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
     // TODO: To make this, we need the MongoDb databse implementation
+    
 }
 
 Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
@@ -108,6 +117,7 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             T_DIMSE_Message msg;
             if (ds == NULL)
             {
+                
                 result.setStatus(Status::Error, (string)"Bad Dataset. Dataset can not be NULL: " + cond.text());
                 DIMSEMessajeFactory::newCStoreRSP(&msg, 
                                                   assoc->nextMsgID++, 
@@ -221,12 +231,15 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle, dulAssParams->callingPresentationAddress))
         {
             T_ASC_RejectParameters rejParams;            
-            rejParams.reason = ASC_REASON_SU_CALLEDAETITLENOTRECOGNIZED;
+            rejParams.reason = ASC_REASON_SU_CALLINGAETITLENOTRECOGNIZED;
             rejParams.result = ASC_RESULT_REJECTEDPERMANENT;
-            rejParams.source = ASC_SOURCE_SERVICEPROVIDER_ACSE_RELATED;
-            ASC_rejectAssociation(assoc, &rejParams);
-            ASC_dropSCPAssociation(assoc);
+            rejParams.source = ASC_SOURCE_SERVICEUSER;
+            OFCondition cond = ASC_rejectAssociation(assoc, &rejParams);
+            cout << cond.text() << endl;
+            ASC_dropAssociation(assoc);
+//             ASC_destroyAssociation(&assoc);
             DUL_ASSOCIATESERVICEPARAMETERS k = assoc->params->DULparams;
+            cout << "association rejected" << endl;
             return;
         }    
         
@@ -274,6 +287,7 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
                     switch(msgRQ.CommandField)
                     {
                         case DIMSE_C_ECHO_RQ:
+                            cout << "echo SCU" << endl;
                             this->cechoSCP(assoc, idPC);
                             break;
                             

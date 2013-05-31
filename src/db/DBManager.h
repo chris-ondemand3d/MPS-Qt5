@@ -13,6 +13,9 @@
 
 #define DICOM_FILES_TABLE                       string("dicom_files")
 #define MONGO_FUNC_insertInstance               string("insertInstance")
+#define MONGO_TAG_VALUE                         "value"
+#define MONGO_TAG_VR                            "VR"
+#define MONGO_TAG_VM                            "VM"
 
 using namespace std;
 typedef mongo::BSONObjBuilder BSONObjBuilder;

@@ -73,6 +73,7 @@ target_link_libraries(  mps-qt5
                         /usr/lib/libboost_system.so
 			/usr/lib/libboost_thread.so
 			/usr/lib/libboost_filesystem.so
+			
 			/usr/lib/libmongoclient.a
 			/usr/lib/libpthread.so
                         
