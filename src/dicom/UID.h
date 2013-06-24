@@ -10,11 +10,12 @@
 
 
 using namespace std;
-using namespace __gnu_cxx;
+
+
 
 class TransferSyntax :public Singleton<TransferSyntax>
 {
-    friend class Singleton;
+    friend class Singleton<TransferSyntax>;
     typedef enum {
         UID_ImplicitVREndian,
         UID_ExplicitVRLittleEndianXFer,
@@ -179,12 +180,12 @@ public:
         UID_FINDHangingProtocolInformationModelUID,
         UID_MOVEHangingProtocolInformationModelUID
     } SOPClassUID;
-
+    
 protected:
     QHash<SOPClassUID, string>  m_sopClassList;
     char** m_sopClassUIDList;
     SOPClass();
-
+    
 public:
     string operator[](SOPClassUID sopClassUID);
     char** sopClassUIDList();
@@ -192,5 +193,4 @@ public:
     bool isValidSOPClassUID(const char* uid);
     virtual ~SOPClass();
 };
-
 #endif // UID_H

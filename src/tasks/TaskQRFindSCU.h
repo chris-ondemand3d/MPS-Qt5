@@ -6,6 +6,7 @@
 #include <tasks/TaskFactory.h>
 
 
+
 class TaskQRFindSCU : public Task
 {
     Q_OBJECT
@@ -16,7 +17,10 @@ protected:
     DcmAET* m_remoteAET;
     DcmQuery* m_query;
     
-    explicit TaskQRFindSCU(DcmNetSCU* scu, DcmAET* remoteAET, DcmQuery* query, QObject* parent = 0);
+    explicit TaskQRFindSCU(DcmNetSCU* scu, 
+                           DcmAET* remoteAET, 
+                           DcmQuery* query, 
+                           QObject* parent = nullptr);
     
 public:    
     virtual void run();

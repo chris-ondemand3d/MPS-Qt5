@@ -1,7 +1,7 @@
 #include "WaitingMessageErrorExcep.h"
 
 WaitingMessageErrorExcep::WaitingMessageErrorExcep(const string& message): 
-    Exception(message, Exception::WaitingMessageError)
+                                                        Exception(message, ExcepType::WaitingMessageError)
 {
     
 }

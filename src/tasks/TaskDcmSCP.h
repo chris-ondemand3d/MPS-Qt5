@@ -4,6 +4,7 @@
 #include <tasks/Task.h>
 #include <dicom/net/DcmNetSCP.h>
 
+
 class TaskDcmSCP : public Task
 {
     Q_OBJECT

@@ -2,8 +2,7 @@
 #define SINGLETON_H
 
 
-
-template <class T>
+template <typename T>
 class Singleton
 {
 public:

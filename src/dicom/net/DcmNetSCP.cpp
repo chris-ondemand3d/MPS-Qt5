@@ -1,5 +1,7 @@
 #include "DcmNetSCP.h"
+#include <db/DBQueryRsp.h>
 #include <QCryptographicHash>
+#include <stdlib.h>
 
 
 
@@ -13,7 +15,7 @@ DcmNetSCP::DcmNetSCP ()
 void DcmNetSCP::loadSettings()
 {
     // the AET setting is saved like: aet=aet@localhost:port
-    MPSSystemSettings* setting = Singleton<MPSSystemSettings>::instance()->instance();
+    MPSSystemSettings* setting = MPSSystemSettings::instance();
     string aet, hostname;
     bool valResult;
     int port;
@@ -71,7 +73,7 @@ void DcmNetSCP::loadSettings()
 
 void DcmNetSCP::saveSettings()
 {
-
+    MPSSystemSettings::instance()->settings()->sync();
 }
 
 
@@ -80,24 +82,91 @@ Status DcmNetSCP::cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     // Sending response
     cout << "entre a echo scu" << endl;
     T_DIMSE_Message rspMsg;
-    Status result;
+    Status result = DIMSEMessajeFactory::newCEchosRSP(&rspMsg, assoc->nextMsgID);
+    if (result.good())
+        DIMSE_sendMessageUsingMemoryData(assoc, idPC, &rspMsg, nullptr, nullptr, nullptr, nullptr);
     
-    if (DIMSE_receiveCommand(assoc, DIMSE_BLOCKING, 5, &idPC, &rspMsg, NULL, NULL).bad())
-        ASC_abortAssociation(assoc);
-    else
-    {
-        cout << "comando recibido" << endl;
-        if ((result = DIMSEMessajeFactory::newCEchosRSP(&rspMsg, assoc->nextMsgID)).good())
-            DIMSE_sendMessageUsingMemoryData(assoc, idPC, &rspMsg, NULL, NULL, NULL, NULL);
-    }    
     
     return result;
 }
 
+void DcmNetSCP::dcmDataset2BSON(const DcmDataset* ds)
+{
+    
+}
+
+
 Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
-    // TODO: To make this, we need the MongoDb databse implementation
+    T_DIMSE_Message resp;
+    OFCondition cond;
+    DcmDataset* dsQuery = nullptr;
+    Status result;
+    DBManager* dbManager = DBManager::instance();
     
+    if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 5, &idPC, &dsQuery, nullptr, nullptr)).good())
+    {
+        // validating the query
+        if (!DcmQuery::validateDcmQuery(dsQuery))
+            return Status(StatusResult::CFindRSPError, "Bad query received from SCU.");
+        
+        // Query is fine
+        mongo::BSONObj queryRspBSON;
+        DcmDataset* dsRspQuery;
+        OFCondition cond;
+        if (dsQuery != nullptr)
+        {
+            DBQueryRsp* queryRsp = dbManager->dcmFind(dsQuery);
+            T_DIMSE_Message* rsp;
+            while(queryRsp->hasNext())
+            {
+                dsRspQuery = queryRsp->nextDcmQR(queryRspBSON);
+                rsp = new T_DIMSE_Message;
+                rsp->CommandField = DIMSE_C_FIND_RSP;
+                strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID,assoc->params->theirImplementationClassUID);
+                rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_PRESENT;
+                rsp->msg.CFindRSP.DimseStatus = STATUS_Pending;
+                rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
+                
+                // Sending response
+                cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, dsRspQuery, nullptr, nullptr, nullptr);
+                if (cond.bad())
+                {
+                    delete rsp;
+                    break;
+                }
+                
+                delete rsp;
+            }
+            
+            delete queryRsp;
+            if (cond.good())
+            {
+                // sending last response
+                rsp = new T_DIMSE_Message;
+                rsp->CommandField = DIMSE_C_FIND_RSP;
+                strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID, assoc->params->theirImplementationClassUID);
+                rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_NULL;
+                rsp->msg.CFindRSP.DimseStatus = STATUS_Success;
+                rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
+                cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+            }
+            else
+                // TODO: notify error sending C-FIND-RSP
+                result.setStatus(StatusResult::CFindRSPError, (string)"Error sending C-FIND-RSP: " + cond.text());
+        }
+        else
+            // TODO: notify that the query is empty and that is an error.
+            result.setStatus(StatusResult::CFindRSPError, (string)"Query object is nullptr: " + cond.text());
+    }
+    else
+        // TODO: throw exception to notify the error
+        result.setStatus(StatusResult::CFindRSPError, (string)"Error receiving the C-FIND-RQ data: " + cond.text());
+    
+    if (cond.bad())
+        ASC_abortAssociation(assoc);
+    
+    return result;
 }
 
 Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
@@ -108,24 +177,23 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
 Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
     // receiving dataset
-        DcmDataset* ds = NULL;
-        Status result(Status::Succes, "Store file Success.");
+        DcmDataset* ds = nullptr;
+        Status result(StatusResult::Success, "Store file Success.");
         OFCondition cond;
         
-        if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 10, &idPC, &ds, NULL, NULL)).good())
+        if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 10, &idPC, &ds, nullptr, nullptr)).good())
         {
             T_DIMSE_Message msg;
-            if (ds == NULL)
-            {
-                
-                result.setStatus(Status::Error, (string)"Bad Dataset. Dataset can not be NULL: " + cond.text());
+            if (ds == nullptr)
+            {               
+                result.setStatus(StatusResult::Error, (string)"Bad Dataset. Dataset can not be nullptr: " + cond.text());
                 DIMSEMessajeFactory::newCStoreRSP(&msg, 
                                                   assoc->nextMsgID++, 
                                                   const_cast<char*>("No SOP Class Affected"), 
-                                 const_cast<char*>("NO SOP Instance Affected"));
-                                 msg.msg.CStoreRSP.DimseStatus = STATUS_STORE_Error_CannotUnderstand;
-                                 DIMSE_sendMessageUsingMemoryData(assoc, idPC, &msg, NULL, NULL, NULL, NULL);
-                                 return result;
+                                                  const_cast<char*>("NO SOP Instance Affected"));
+                msg.msg.CStoreRSP.DimseStatus = STATUS_STORE_Error_CannotUnderstand;
+                DIMSE_sendMessageUsingMemoryData(assoc, idPC, &msg, nullptr, nullptr, nullptr, nullptr);
+                return result;
             }
             // Everything is fine
             // Creating the message
@@ -134,22 +202,24 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
             
             // saving the file
-            DcmFileFormat* dcmFile = new DcmFileFormat(ds);
             char* filename = strdup((this->m_rootFolder.c_str() + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());
             ds->saveFile(filename);
-            Singleton<SystemManager>::instance()->mpsSystem()->dbManager()->store(ds, filename);
-            delete filename;
+            SystemManager::instance()->mpsSystem()->dbManager()->store(ds, filename);
+            
             delete ds;
-            T_DIMSE_Message rsp;
-            DIMSEMessajeFactory::newCStoreRSP(&rsp, 
+            delete [] filename;
+            T_DIMSE_Message* rsp = new T_DIMSE_Message;
+            DIMSEMessajeFactory::newCStoreRSP(rsp, 
                                               assoc->nextMsgID++,
                                               const_cast<char*>(sopClassUID.c_str()),
                                               const_cast<char*>(sopInstanceUID.c_str()));
             // Sending response messgae
-            DIMSE_sendMessageUsingMemoryData(assoc, idPC, &rsp, NULL, NULL, NULL, NULL);
+            DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+            
+            delete rsp;
         }
         
-        result.setStatus(Status::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
+        result.setStatus(StatusResult::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
 }
 
 Status DcmNetSCP::receiveCommand(T_ASC_Association* assoc, T_DIMSE_Message& message)
@@ -227,7 +297,7 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         // Checking that the calling AET has permission to communicate with our server
         MPSSystemSettings* systemSettings = Singleton<SystemManager>::instance()->mpsSystem()->settings();
         DUL_ASSOCIATESERVICEPARAMETERS* dulAssParams = &(assoc->params->DULparams);
-        
+        cout << dulAssParams->callingAPTitle << endl;
         if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle, dulAssParams->callingPresentationAddress))
         {
             T_ASC_RejectParameters rejParams;            
@@ -256,13 +326,14 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         while(true)
         {
             
-            cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 10, &idPC, &msgRQ, NULL, NULL);
+            cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 10, &idPC, &msgRQ, nullptr, nullptr);
             switch(cond.code())
             {
                 case DULC_PEERREQUESTEDRELEASE:
                 {
                     ASC_acknowledgeRelease(assoc);
                     ASC_dropSCPAssociation(assoc);
+                    cout << "Releasing association...";
                     return;
                 }
                 case DULC_LISTERROR:
@@ -283,35 +354,40 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
                 default: // everything is fine
                 {
                     ASC_findAcceptedPresentationContext(assoc->params, idPC, &pc);
-                    
+                    Status* result = new Status;
                     switch(msgRQ.CommandField)
                     {
                         case DIMSE_C_ECHO_RQ:
-                            cout << "echo SCU" << endl;
-                            this->cechoSCP(assoc, idPC);
+                        {
+                            *result = this->cechoSCP(assoc, idPC);                             
                             break;
+                        }
                             
                         case DIMSE_C_FIND_RQ:
-                            this->cfindSCP(assoc, idPC);
+                        {
+                            *result = this->cfindSCP(assoc, idPC);
                             break;
+                        }
                             
                         case DIMSE_C_MOVE_RQ:
-                            this->cmoveSCP(assoc, idPC);
+                        {
+                            *result = this->cmoveSCP(assoc, idPC);
                             break;
+                        }
                             
                         case DIMSE_C_STORE_RQ:
-                            this->cstoreSCP(assoc, idPC);
+                        {
+                            *result = this->cstoreSCP(assoc, idPC);
                             break;
+                        }
+                    }
+                    if (result->status() == StatusResult::AssociationError)
+                    {
+                        this->abortAssociation(assoc);
+                        // TODO: Notify this error to the system.
+                        return;
                     }
                 }
-                
-                //             else
-                //             {
-                //                 cout << "Condition: " << cond.text() << endl << cond.status() << endl;
-                //                 ASC_abortAssociation(assoc);
-                //                 ASC_dropSCPAssociation(assoc, 0);
-                //                 throw WaitingMessageErrorExcep((string)"Error receiving message from this association: " + cond.text());
-                //             }
             }
         }
     }
@@ -324,11 +400,15 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         // Rejecting this association
         ASC_rejectAssociation(assoc, &rejParams);
         ASC_dropSCPAssociation(assoc, 0);
-        
-        throw CalledAETErrorExcep("Invalid Called AET.");
+        // TODO: Notify this error
     }
 }
 
+void DcmNetSCP::abortAssociation(T_ASC_Association* assoc)
+{
+    ASC_abortAssociation(assoc);
+    ASC_dropAssociation(assoc);
+}
 
 
 void DcmNetSCP::start()
@@ -354,7 +434,8 @@ void DcmNetSCP::start()
     }
     else
     {
-        cout << (string)"Error: Network is already in use: " + cond.text() << endl;
+        cout << (string)"Error: Network port is already in use: " + cond.text() << endl;
+        exit(EXIT_FAILURE);
     }
 }
 void DcmNetSCP::stop()

@@ -3,10 +3,11 @@
 
 #include <utils/Status.h>
 
+
 class Progress
 {
 public:
-    virtual Status notifyProgress(void** params){}
+    virtual Status notifyProgress(void** params) = 0;
     virtual ~Progress(){}
 };
 

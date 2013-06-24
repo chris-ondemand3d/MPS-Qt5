@@ -1,10 +1,10 @@
 #include "TaskEchoSCP.h"
 
 TaskEchoSCP::TaskEchoSCP(DcmNetSCP* scp, 
-                         T_ASC_Association* assoc, 
-                         T_ASC_PresentationContextID idPC, 
-                         QObject* parent): 
-    DcmTask(assoc, idPC, C_ECHO_SCP, parent)
+                            T_ASC_Association* assoc, 
+                            T_ASC_PresentationContextID idPC, 
+                            QObject* parent): 
+                            DcmTask(assoc, idPC, TaskType::C_ECHO_SCP, parent)
 {
     this->m_scp = scp;
 }

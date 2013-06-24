@@ -1,8 +1,23 @@
 #ifndef AETTABLEMANAGER_H
 #define AETTABLEMANAGER_H
 
-#include <QList>
 #include <utils/Singleton.h>
+#include <list>
+#include <string>
+
+using namespace std;
+
+
+enum class AppPermission{
+    ALL_PERM,
+    C_ECHO_PERM,
+    C_STORAGE_PERM,
+    C_FIND_PERM,
+    C_MOVE_PERM,
+    NO_PERMISSION
+};
+
+typedef list<AppPermission> PermissionList;
 
 class AetTableManager : public Singleton<AetTableManager>
 {
@@ -10,17 +25,7 @@ class AetTableManager : public Singleton<AetTableManager>
 private:
     AetTableManager();
 public:
-    typedef enum {
-        ALL_PERM,
-        C_ECHO_PERM,
-        C_STORAGE_PERM,
-        C_FIND_PERM,
-        C_MOVE_PERM,
-        NO_PERMISSION
-    } Permission;
-    
-    typedef QList<Permission> PermissionList;
-    PermissionList getPermissions(char* aet);
+    PermissionList getPermissions(const string& aet);
     
     virtual ~AetTableManager();
 };

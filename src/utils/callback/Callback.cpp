@@ -19,6 +19,7 @@ Callback<ClassType>& Callback<ClassType>::operator=(const Callback<ClassType>& c
 {
     this->m_instance = callback.m_instance;
     this->m_method = callback.m_method;
+    return *this;
 }
 
 template <class ClassType>

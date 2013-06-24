@@ -3,7 +3,7 @@
 
 TaskHandleRqDCMConn::TaskHandleRqDCMConn(DcmNetSCP* scp, T_ASC_Network* net, 
                                          T_ASC_Association* assoc, QObject* parent): 
-    Task(Task::HANDLE_INCOMMING_DCM_CONN, parent)
+    Task(TaskType::HANDLE_INCOMMING_DCM_CONN, parent)
 {
     this->m_association = assoc;
     this->m_network = net;

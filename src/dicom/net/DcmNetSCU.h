@@ -25,6 +25,7 @@
 
 
 
+
 class DcmNetSCU
 {
 private:
@@ -43,10 +44,10 @@ public:
     Status cstore_RQ(DcmAET& remoteAet, FileManager& directory, int timeout = 0);
     Status cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int timeout = 0);
     Status cstore_RQ(DcmAET& remoteAet, const string& file, int timeout = 0);
-    Status cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* proggres = NULL);
+    Status cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* proggres = nullptr);
     Status cmove_RQ(DcmAET& findAET, DcmAET& moveAET, 
                     DcmQuery& query,
-                    Callback<Progress>* progress = NULL);
+                    Callback<Progress>* progress = nullptr);
     void rejectAssoc(T_ASC_Association*& assoc,
                      T_ASC_RejectParametersReason reason, 
                      T_ASC_RejectParametersResult result,

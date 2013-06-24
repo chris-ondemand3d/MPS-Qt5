@@ -210,6 +210,10 @@ char** SOPClass::sopClassUIDList()
 
 SOPClass::~SOPClass()
 {
+    for (int i = 0; i < this->m_sopClassList.count(); i++)
+        delete this->m_sopClassUIDList[i];
+    delete this->m_sopClassUIDList;
+    
     this->m_sopClassList.clear();
 }
 

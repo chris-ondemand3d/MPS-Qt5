@@ -11,6 +11,7 @@
 #include <dicom/net/DcmNetSCP.h>
 #include <dcmtk/dcmdata/dcostrma.h>
 #include <dcmtk/dcmdata/dcostrma.h>
+#include <dcmtk/dcmdata/dcvrcs.h>
 #include <dcmtk/dcmdata/dcdeftag.h>
 #include <stdio.h>
 #include <tasks/tasks.h>
@@ -20,13 +21,50 @@
 
 using namespace std;
 
+void aaa(DcmElement* elem)
+{
+    
+    elem = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
+}
+
 int main(int argc, char** argv)
 {
+    
+//     DcmDataset ds;
+//     DcmUniqueIdentifier* ui;
+//     aaa((DcmElement*)ui);
+//     ds.insert(ui);
+//     ds.print(cout);
+//     exit(0);
+//     mongo::BSONObjBuilder k;
+//     k << "test" << BSON_ARRAY("asdasd" << 999 << "uuuuu");
+//     cout << k.done() << endl;
+//     vector<mongo::BSONElement> e = k.done()["test"].Array();
+//     mongo::BSONElement ff = k.done()["test"].Array()[0];
+//     cout << ff.type() << endl;
+//     
+//     exit(0);
+//     for (vector<mongo::BSONElement>::iterator it = e.begin(); it < e.end(); it++)
+//     {
+//         mongo::BSONElement elem = *it;
+//         try
+//         {
+//             cout << elem.str() << endl;
+//         }
+//         catch(mongo::MsgAssertionException& ex)
+//         {}
+//     }
+//     
+//     exit(0);
     
 //     DBManager manager("mpsdb","localhost");
 //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA.dcm");
 //     manager.store(f.getDataset());
+    QApplication app1(argc, argv);
+    TaskFactory::newDcmSCPInstance(new DcmNetSCP())->start();
+    return app1.exec();
+
     DcmAET server1("COMMON", "localhost", 1111);
     DcmAET server("DCM4CHEE", "localhost", 11112);
 //     cout << QDir::homePath().toStdString();
@@ -39,6 +77,7 @@ int main(int argc, char** argv)
 //     md5sum.addData(datetime.toLocal8Bit().data(), datetime.size());
 //     cout << QString(md5sum.result().toHex()).toStdString() << endl << datetime.toStdString();
 //     exit(0);
+   
     
     
     QApplication app(argc, argv);
@@ -59,6 +98,7 @@ int main(int argc, char** argv)
     DcmQuery query;
     DcmUniqueIdentifier* studyInstanceUID = new DcmUniqueIdentifier(DCM_StudyInstanceUID);
     studyInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814211218700000055");
+    query.addKey(studyInstanceUID);
 //     DcmUniqueIdentifier* seriesInstanceUID = new DcmUniqueIdentifier(DCM_SeriesInstanceUID);
 //     seriesInstanceUID->putString("1.3.12.2.1107.5.4.2.6226.20040721.161218.167");    
 //     DcmUniqueIdentifier* sopInstanceUID = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
@@ -71,13 +111,16 @@ int main(int argc, char** argv)
 //     DcmUniqueIdentifier* sopInstanceUID = new DcmUniqueIdentifier(DCM_SOPInstanceUID);
 //     sopInstanceUID->putString("1.3.12.2.1107.5.1.4.54181.30000007070814230000000007536");
     
-    query.setQueryLevel(DcmQuery::STUDY_LEVEL);
+    query.setQueryLevel(QueryLevel::STUDY_LEVEL);
     
-    DcmIntegerString* numberOfInstace = new DcmIntegerString(DCM_NumberOfPatientRelatedInstances);
-    query.addKey(studyInstanceUID);
+//     DcmIntegerString* numberOfInstace = new DcmIntegerString(DCM_NumberOfPatientRelatedInstances);
+//     query.addKey(studyInstanceUID);
 //     query.addKey(seriesInstanceUID);
 //     query.addKey(sopInstanceUID);
-    query.addKey(numberOfInstace);
+//     query.addKey(numberOfInstace);
+    cout << query.toDataset()->saveFile("/home/freddy/query.dcm").text() << endl;
+    query.toDataset()->print(cout);
+    exit(0);
     TaskFactory::newDcmSCPInstance(new DcmNetSCP())->start();
     for (int i = 0; i < 10000; i++);
     Status status = scu.cmove_RQ(server, scu.getAET(), query);
@@ -95,14 +138,14 @@ int main(int argc, char** argv)
 //         cout << "ECHO ERROR... " << endl << "Message: " << status.message().c_str() << endl;
 
 //     FileManager dcmfile("/media/Trabajo/dicom/");
-//     DcmFileFormat* file = NULL;
+//     DcmFileFormat* file = nullptr;
 // 
 //     OFString pname;
 //     while (dcmfile.nextDcmFile(file).good())
 //     {
 //         file->getDataset()->findAndGetOFString(DCM_PatientName, pname);
 //         cout << "patient name: " << pname.c_str() << endl;
-//         if (file != NULL)
+//         if (file != nullptr)
 //             delete file;
 //     }   
 // // 
@@ -115,7 +158,7 @@ int main(int argc, char** argv)
 //     ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
 // 
 //     // set calling and called AE titles
-//     ASC_setAPTitles(params, "IMAGIS", "DCM4CHEE", NULL);
+//     ASC_setAPTitles(params, "IMAGIS", "DCM4CHEE", nullptr);
 // 
 //     // the DICOM server accepts connections at server.nowhere.com port 104
 //     ASC_setPresentationAddresses(params, "localhost", "localhost:11112");
@@ -135,7 +178,7 @@ int main(int argc, char** argv)
 //             // the remote SCP has accepted the Verification Service Class
 //             DIC_US id = assoc->nextMsgID++; // generate next message ID
 //             DIC_US status; // DIMSE status of C-ECHO-RSP will be stored here
-//             DcmDataset *sd = NULL; // status detail will be stored here
+//             DcmDataset *sd = nullptr; // status detail will be stored here
 //             // send C-ECHO-RQ and handle response
 //             DIMSE_echoUser(assoc, id, DIMSE_BLOCKING, 0, &status, &sd);
 //             delete sd; // we don't care about status detail

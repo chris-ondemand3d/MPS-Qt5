@@ -19,8 +19,12 @@ protected:
     DcmQuery* m_query;
     char* m_saveFolder;
     
-    explicit TaskQRMoveSCU(DcmNetSCU* scu, DcmAET* findAET, DcmAET* moveAET, 
-                           DcmQuery* query, char* saveFolder, QObject* parent = 0);
+    explicit TaskQRMoveSCU(DcmNetSCU* scu, 
+                           DcmAET* findAET, 
+                           DcmAET* moveAET, 
+                           DcmQuery* query, 
+                           char* saveFolder, 
+                           QObject* parent = 0);
     
 public:    
     virtual void run();

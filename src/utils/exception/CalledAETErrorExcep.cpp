@@ -1,7 +1,7 @@
 #include "CalledAETErrorExcep.h"
 
 CalledAETErrorExcep::CalledAETErrorExcep(const string& message): 
-    Exception(message, CalledAETError)
+                                              Exception(message, ExcepType::CalledAETError)
 {
     this->m_message = message;
 }

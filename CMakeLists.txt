@@ -12,6 +12,7 @@ find_package(Qt5Widgets)
 
 add_executable(
 mps-qt5 
+src/db/DBQueryRsp.cpp 
 src/settings/MPSSystemSettings.cpp 
 src/db/DBDcmTagTable.cpp 
 src/db/DBManager.cpp 
@@ -89,7 +90,7 @@ include_directories(
 ${Qt5Widgets_INCLUDE_DIRS}
 ${Qt5Core_INCLUDE_DIRS}
 )
-
+set(CMAKE_CXX_FLAGS "-std=c++0x")
 add_subdirectory(src)
 
 install(TARGETS mps-qt5 RUNTIME DESTINATION bin)

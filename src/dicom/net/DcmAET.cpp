@@ -22,7 +22,7 @@ DcmAET::DcmAET(const DcmAET& aet)
     this->m_port = aet.m_port;
 }
 
-string DcmAET::toString()
+string DcmAET::toString() const
 {
     return this->m_aet + "@" + this->m_hostname + ":" + QVariant(this->m_port).toString().toStdString();
 }
@@ -92,7 +92,7 @@ bool DcmAET::validateAetSettingValue(char* aetSettingVal,
 }
 
 
-void DcmAET::print()
+void DcmAET::print() const
 {
     
     cout << "AET: " << this->m_aet.c_str()<< endl

@@ -1,8 +1,12 @@
 #include "TaskQRMoveSCU.h"
 
-TaskQRMoveSCU::TaskQRMoveSCU(DcmNetSCU* scu, DcmAET* findAET, DcmAET* moveAET, 
-                             DcmQuery* query, char* savFolder, QObject* parent): 
-    Task(Task::C_MOVE_SCU, parent)
+TaskQRMoveSCU::TaskQRMoveSCU(DcmNetSCU* scu, 
+                                  DcmAET* findAET, 
+                                  DcmAET* moveAET, 
+                                  DcmQuery* query, 
+                                  char* savFolder, 
+                                  QObject* parent): 
+                                  Task(TaskType::C_MOVE_SCU, parent)
 {
     this->m_scu = scu;
     this->m_findAET = findAET;

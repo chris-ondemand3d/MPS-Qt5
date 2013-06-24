@@ -1,13 +1,15 @@
 #ifndef TASKMANAGER_H
 #define TASKMANAGER_H
 
-#include <tasks/Task.h>
+
 #include <QHash>
 #include <utils/Status.h>
-#include <tasks/Task.h>
 #include <iostream>
+#include <tasks/Task.h>
 
 using namespace std;
+class Task;
+typedef Qt::HANDLE TaskID;
 
 class TaskManager : public QObject
 {
@@ -25,5 +27,4 @@ public Q_SLOTS:
     void addTask();
     void removeTask();
 };
-
 #endif // TASKMANAGER_H

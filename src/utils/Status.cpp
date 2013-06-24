@@ -1,6 +1,6 @@
 #include "Status.h"
 
-Status::Status(Status::OperationResult status, const string& message)
+Status::Status(StatusResult status, const string& message)
 {
     this->m_status = status;
     this->m_description = message;
@@ -19,25 +19,26 @@ bool Status::bad()
 
 bool Status::good()
 {
-    return this->m_status == Succes ||
-        this->m_status == ExistDicomFile;
-}
-
-string Status::message()
-{
-    return this->m_description;
+    if (this->m_status == StatusResult::Success ||
+        this->m_status == StatusResult::ExistDicomFile)
+        return true;
+    
+    return false;
 }
 
 Status& Status::operator=(const Status& status)
 {
     this->m_status = status.m_status;
     this->m_description = status.m_description;
+    return *this;
+}
+Status& Status::operator=(const Status&& status)
+{
+    this->m_description = std::move(status.m_description);
+    this->m_status = std::move(status.m_status);
+    return *this;
 }
 
-Status::OperationResult Status::status()
-{
-    return this->m_status;
-}
 
 
 Status::~Status()

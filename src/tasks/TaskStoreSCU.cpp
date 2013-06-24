@@ -1,7 +1,7 @@
 #include "TaskStoreSCU.h"
 
 TaskStoreSCU::TaskStoreSCU(DcmNetSCU* scu, DcmAET* remoteAET, FileManager* files, QObject* parent): 
-    Task(Task::C_STORE_SCU, parent)
+    Task(TaskType::C_STORE_SCU, parent)
 {
     this->m_files = files;
     this->m_remoteAET = remoteAET;

@@ -5,7 +5,7 @@ SystemManager::SystemManager()
     this->m_system = new MPSSystem();
 }
 
-bool SystemManager::registerRemoteDcmAET(DcmAET& remoteAET)
+bool SystemManager::registerRemoteDcmAET(const DcmAET& remoteAET)
 {
     QString newAETSetting = MPSSetting_REMOTE_AET_GROUP + "/" + QString(remoteAET.aet().c_str());
     if (this->m_system->settings()->hasSetting(newAETSetting))

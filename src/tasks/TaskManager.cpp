@@ -1,4 +1,5 @@
 #include "TaskManager.h"
+#include <unordered_set>
 
 TaskManager::TaskManager(QObject* parent): QObject(parent)
 {
@@ -29,9 +30,9 @@ Status TaskManager::runTask(TaskID taskID)
 {
     if (this->m_threads.contains(taskID) && 
         this->m_threads[taskID]->isRunning())
-        return Status(Status::TaskError, "This task is running right now");
+        return Status(StatusResult::TaskError, "This task is running right now");
     
-    return Status(Status::Succes, "Running task success.");
+    return Status(StatusResult::Success, "Running task success.");
 }
 
 

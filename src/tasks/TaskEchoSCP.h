@@ -5,6 +5,7 @@
 #include <tasks/TaskFactory.h>
 #include <dicom/net/DcmNetSCP.h>
 
+
 class DcmNetSCP;
 
 class TaskEchoSCP : public DcmTask
@@ -18,7 +19,7 @@ protected:
                          T_ASC_Association* assoc, 
                          T_ASC_PresentationContextID idPC, 
                          QObject* parent = 0);
-
+    
 public:    
     virtual void run();
     virtual ~TaskEchoSCP();

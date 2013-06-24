@@ -2,10 +2,10 @@
 
 
 TaskQRMoveSCP::TaskQRMoveSCP(DcmNetSCP* scp, 
-                             T_ASC_Association* assoc, 
-                             T_ASC_PresentationContextID idPC, 
-                             QObject* parent): 
-    DcmTask(assoc, idPC,Task::C_MOVE_SCP , parent)
+                                  T_ASC_Association* assoc, 
+                                  T_ASC_PresentationContextID idPC, 
+                                  QObject* parent): 
+                                  DcmTask(assoc, idPC,TaskType::C_MOVE_SCP , parent)
 {
 
 }

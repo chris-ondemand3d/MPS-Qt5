@@ -5,6 +5,7 @@
 
 #include <utils/Status.h>
 
+
 class DIMSEMessajeFactory
 {
 public:
@@ -41,5 +42,4 @@ public:
                               DIC_US numberOfRemainingSubOperations,
                               DIC_US numberOfWarningSubOperations);
 };
-
 #endif

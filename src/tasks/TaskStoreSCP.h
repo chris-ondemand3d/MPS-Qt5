@@ -5,12 +5,13 @@
 #include <dicom/net/DcmNetSCP.h>
 #include <tasks/TaskFactory.h>
 
+
 class DcmNetSCP;
 
 class TaskStoreSCP : public DcmTask
 {
     Q_OBJECT
-
+    
     friend class TaskFactory;
 protected:
     DcmNetSCP* m_scp;
@@ -24,5 +25,4 @@ public:
     virtual void run();
     virtual ~TaskStoreSCP();
 };
-
 #endif // TASKSTORESCP_H

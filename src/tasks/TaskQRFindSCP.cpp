@@ -5,7 +5,7 @@ TaskQRFindSCP::TaskQRFindSCP(DcmNetSCP* scp,
                              T_ASC_Association* assoc, 
                              T_ASC_PresentationContextID idPC,
                              QObject* parent): 
-    DcmTask(assoc, idPC, Task::C_FIND_SCP, parent)
+                             DcmTask(assoc, idPC, TaskType::C_FIND_SCP, parent)
 {
     this->m_scp = scp;
 }

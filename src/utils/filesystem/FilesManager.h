@@ -5,6 +5,7 @@
 #include <dcmtk/dcmdata/dcfilefo.h>
 #include <utils/Status.h>
 
+
 class FileManager
 {
 private:
@@ -12,10 +13,10 @@ private:
     QString m_dirname;
     quint64 m_countDcmFiles;
     quint64 m_countOtherFiles;
-
+    
 public:
     FileManager(const QString dirname);
-    inline QString dirname() {return this->m_dirname;}
+    inline QString dirname() const {return this->m_dirname;}
     void setDirname(const QString& dirname);
     void reset();
     Status nextDcmFile(DcmFileFormat** dcmFile);

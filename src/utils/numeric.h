@@ -4,6 +4,7 @@
 
 using namespace std;
 
+
 inline string int2str(long int number)
 {
     string strNumber;

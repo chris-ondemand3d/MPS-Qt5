@@ -3,7 +3,7 @@
 CFindeRSPProgress::CFindeRSPProgress(const QObject* obj)
 {
     this->m_obj = (QObject*)obj;
-    this->m_queryRsp = NULL;
+    this->m_queryRsp = nullptr;
 }
 
 Status CFindeRSPProgress::notifyProgress(void** params)
@@ -13,11 +13,11 @@ Status CFindeRSPProgress::notifyProgress(void** params)
  * - params[0] =  DcmDataset pointer with query result
  */
 {
-    if (params == NULL)
-        return Status(Status::Error, "Parameters can not be NULL.");
+    if (params == nullptr)
+        return Status(StatusResult::Error, "Parameters can not be nullptr.");
     ((DcmDataset*)params[0])->print(cout);
     
-    return Status(Status::Succes, "");
+    return Status(StatusResult::Success, "");
 }
 
 CFindeRSPProgress::~CFindeRSPProgress()

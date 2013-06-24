@@ -5,6 +5,7 @@
 #include <system/MPSSystem.h>
 #include <dicom/net/DcmAET.h>
 
+
 class MPSSystem;
 
 class SystemManager : public Singleton<SystemManager>
@@ -16,7 +17,7 @@ private:
     
 public:
     inline MPSSystem* mpsSystem() {return this->m_system;}
-    bool registerRemoteDcmAET(DcmAET& remoteAET);
+    bool registerRemoteDcmAET(const DcmAET& remoteAET);
     ~SystemManager();
 };
 

@@ -4,7 +4,7 @@ Status DIMSEMessajeFactory::newCEchosRSP(T_DIMSE_Message* msg, DIC_US msgIDToRes
 {
     
     if (msgIDToRespond < 0 || msgIDToRespond % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
     
     // Everything is fine
     strcpy(msg->msg.CEchoRSP.AffectedSOPClassUID, UID_VerificationSOPClass);
@@ -19,7 +19,7 @@ Status DIMSEMessajeFactory::newCEchosRSP(T_DIMSE_Message* msg, DIC_US msgIDToRes
 Status DIMSEMessajeFactory::newCEchosRQ(T_DIMSE_Message* msg, DIC_US msgID)
 {
     if (msgID < 0 || msgID % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
     
     // Everything is fine
     strcpy(msg->msg.CEchoRQ.AffectedSOPClassUID, UID_VerificationSOPClass);
@@ -36,10 +36,10 @@ Status DIMSEMessajeFactory::newCStoreRQ(T_DIMSE_Message* msg,
                                         char* affectedSOPinstanceUID)
 {
     if (msgID < 0 || msgID % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
-    if (affectedSOPClassUID == NULL || affectedSOPinstanceUID == NULL ||
+        return Status(StatusResult::Error, "Bad Message ID.");
+    if (affectedSOPClassUID == nullptr || affectedSOPinstanceUID == nullptr ||
         strlen(affectedSOPClassUID) == 0 || strlen(affectedSOPinstanceUID)  == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is fine
     strcpy(msg->msg.CStoreRQ.AffectedSOPClassUID, affectedSOPClassUID);
@@ -57,9 +57,9 @@ Status DIMSEMessajeFactory::newCStoreRSP(T_DIMSE_Message* msg,
                                          char* affectedSOPClassUID, 
                                          char* affectedSOPinstanceUID)
 {
-    if (affectedSOPClassUID == NULL || affectedSOPinstanceUID == NULL ||
+    if (affectedSOPClassUID == nullptr || affectedSOPinstanceUID == nullptr ||
         strlen(affectedSOPClassUID) == 0 || strlen(affectedSOPinstanceUID)  == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is fine
     strcpy(msg->msg.CStoreRSP.AffectedSOPClassUID, affectedSOPClassUID);
@@ -76,9 +76,9 @@ Status DIMSEMessajeFactory::newCStoreRSP(T_DIMSE_Message* msg,
 Status DIMSEMessajeFactory::newCFindRQ(T_DIMSE_Message* msg, DIC_US msgID, char* affectedSOPClassUID)
 {
     if (msgID < 0 || msgID % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
-    if (affectedSOPClassUID == NULL || strlen(affectedSOPClassUID) == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
+    if (affectedSOPClassUID == nullptr || strlen(affectedSOPClassUID) == 0)
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is fine
     strcpy(msg->msg.CFindRQ.AffectedSOPClassUID, affectedSOPClassUID);
@@ -96,9 +96,9 @@ Status DIMSEMessajeFactory::newCFindRSP(T_DIMSE_Message* msg,
                                         DIC_US status)
 {
     if (msgIDToRespond < 0 || msgIDToRespond % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
-    if (affectedSOPClassUID == NULL || strlen(affectedSOPClassUID) == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
+    if (affectedSOPClassUID == nullptr || strlen(affectedSOPClassUID) == 0)
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is find
     strcpy(msg->msg.CFindRSP.AffectedSOPClassUID, affectedSOPClassUID);
@@ -117,9 +117,9 @@ Status DIMSEMessajeFactory::newCMoveRQ(T_DIMSE_Message* msg,
                                        char* moveDestination)
 {
     if (msgID < 0 || msgID % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
-    if (affectedSOPClassUID == NULL || strlen(affectedSOPClassUID) == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
+    if (affectedSOPClassUID == nullptr || strlen(affectedSOPClassUID) == 0)
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is fine
     strcpy(msg->msg.CMoveRQ.AffectedSOPClassUID, affectedSOPClassUID);
@@ -143,9 +143,9 @@ Status DIMSEMessajeFactory::newCMoveRSP(T_DIMSE_Message* msg,
                                         DIC_US numberOfWarningSubOperations)
 {
     if (msgIDToRespond < 0 || msgIDToRespond % 2 == 0)
-        return Status(Status::Error, "Bad Message ID.");
-    if (affectedSOPClassUID == NULL || strlen(affectedSOPClassUID) == 0)
-        return Status(Status::Error, "Bad SOP Class UID or SOP Instance UID.");
+        return Status(StatusResult::Error, "Bad Message ID.");
+    if (affectedSOPClassUID == nullptr || strlen(affectedSOPClassUID) == 0)
+        return Status(StatusResult::Error, "Bad SOP Class UID or SOP Instance UID.");
     
     // Everything is find
     strcpy(msg->msg.CMoveRSP.AffectedSOPClassUID, affectedSOPClassUID);

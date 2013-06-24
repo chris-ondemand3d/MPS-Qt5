@@ -3,7 +3,8 @@
 
 #include <utils/Status.h>
 
-template <class ClassType>
+
+template <typename ClassType>
 class Callback
 {
 private:

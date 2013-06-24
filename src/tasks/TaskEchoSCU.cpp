@@ -1,5 +1,8 @@
 #include "TaskEchoSCU.h"
-TaskEchoSCU::TaskEchoSCU(DcmNetSCU* scu, DcmAET* remoteAET, QObject* parent): Task(Task::C_ECHO_SCU, parent)
+TaskEchoSCU::TaskEchoSCU(DcmNetSCU* scu, 
+                              DcmAET* remoteAET, 
+                              QObject* parent): 
+                              Task(TaskType::C_ECHO_SCU, parent)
 {
     this->m_remoteAET = remoteAET;
     this->m_scu = scu;

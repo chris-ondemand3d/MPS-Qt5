@@ -4,6 +4,7 @@
 #include <tasks/Task.h>
 #include <dcmtk/dcmnet/assoc.h>
 
+
 class DcmTask : public Task
 {
     Q_OBJECT

@@ -4,21 +4,23 @@
 #include <utils/Status.h>
 
 
-class Exception
+
+enum class ExcepType
 {
-public:
-    typedef enum {
-        InvalidInteger,
-        CalledAETError,
-        WaitingMessageError,
-    } ExcepType;
+    InvalidInteger,
+    CalledAETError,
+    WaitingMessageError,
+};
+
+class Exception : public exception
+{
 protected:
     string m_message;
     ExcepType m_exceptype;
 public:
     Exception(const string& message, ExcepType execpType);
-    ExcepType execptionType();
-    string message();
+    inline ExcepType execptionType() const {return this->m_exceptype;}
+    inline string message() const {return this->m_message;}
     virtual ~Exception(){}
 };
 

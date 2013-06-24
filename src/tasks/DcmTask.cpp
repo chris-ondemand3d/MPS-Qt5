@@ -2,7 +2,7 @@
 
 DcmTask::DcmTask(T_ASC_Association* assoc, 
                  T_ASC_PresentationContextID idPC, 
-                 Task::TaskType taskType, 
+                 TaskType taskType, 
                  QObject* parent): Task(taskType, parent)
 {
     this->m_association = assoc;
@@ -11,5 +11,4 @@ DcmTask::DcmTask(T_ASC_Association* assoc,
 
 DcmTask::~DcmTask()
 {
-
 }

@@ -5,6 +5,7 @@
 #include <dicom/net/DcmNetSCP.h>
 #include <tasks/TaskFactory.h>
 
+
 class TaskQRMoveSCP : public DcmTask
 {
     Q_OBJECT

@@ -32,13 +32,13 @@ Status FileManager::nextDcmFile(DcmFileFormat** dcmFile)
         if ((*dcmFile)->loadFile(filename.toLocal8Bit().data()).good())
         {
             cout << "File: " << filename.toLocal8Bit().data();
-            return Status(Status::ExistDicomFile, "Success");
+            return Status(StatusResult::ExistDicomFile, "Success");
         }
 
         delete *dcmFile;
         filename.clear();
     }
-    return Status(Status::NotExistDicomFile, "End of file list.");
+    return Status(StatusResult::NotExistDicomFile, "End of file list.");
 }
 
 void FileManager::setDirname(const QString& dirname)

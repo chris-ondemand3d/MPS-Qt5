@@ -22,7 +22,6 @@
 using namespace std;
 
 
-
 class DcmNetSCP
 {
 protected:
@@ -35,6 +34,8 @@ protected:
     Status receiveCommand(T_ASC_Association* assoc, T_DIMSE_Message& message);
     void loadSettings();
     void saveSettings();
+    void dcmDataset2BSON(const DcmDataset* ds);
+    void abortAssociation(T_ASC_Association* assoc);
     
 public:
     DcmNetSCP();
@@ -48,5 +49,6 @@ public:
     virtual ~DcmNetSCP();
     
 };
+
 
 #endif // DCMNETSCP_H

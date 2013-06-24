@@ -4,42 +4,46 @@
 #include <string>
 using namespace std;
 
+
+enum class StatusResult{
+    Success,
+    Error,
+    ExistDicomFile,
+    NotExistDicomFile,
+    BadPresentationContext,
+    NetworkIsNotReady,
+    AssociationError,
+    CStoreRQError,
+    CStoreRSPError,
+    CFindRQError,
+    CFindRSPError,
+    CMoveRQError,
+    CMoveRSPError,
+    TaskError,
+    MongoDBError,
+} ;
+
 class Status
 {
 public:
-    typedef enum {
-        Succes,
-        Error,
-        ExistDicomFile,
-        NotExistDicomFile,
-        BadPresentationContext,
-        NetworkIsNotReady,
-        AssociationError,
-        CStoreRQError,
-        CStoreRSPError,
-        CFindRQError,
-        CFindRSPError,
-        CMoveRQError,
-        CMoveRSPError,
-        TaskError,
-        MongoDBError,
-    } OperationResult;
+    
 private:
-    OperationResult m_status;
+    StatusResult m_status;
     string m_description;
 public:
-    Status(OperationResult status = Succes, const string& message = "Succes");
+    Status(StatusResult status = StatusResult::Success, const string& message = "Succes");
     Status(const Status& other);
     bool good();
     bool bad();
-    OperationResult status();
-    string message();
-    inline void setStatus (OperationResult status, const string& message)
+    inline StatusResult status(){return  this->m_status;}
+    inline string message(){return this->m_description;}
+    inline void setStatus (StatusResult status, const string& message)
     {
         this->m_status = status;
         this->m_description = message;
     }
     Status& operator=(const Status& status);
+    Status& operator=(const Status&& status);
     virtual ~Status();
 };
 
