@@ -107,20 +107,28 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 5, &idPC, &dsQuery, nullptr, nullptr)).good())
     {
         // validating the query
+        dsQuery->print(cout);
         if (!DcmQuery::validateDcmQuery(dsQuery))
             return Status(StatusResult::CFindRSPError, "Bad query received from SCU.");
         
         // Query is fine
-        mongo::BSONObj queryRspBSON;
         DcmDataset* dsRspQuery;
         OFCondition cond;
         if (dsQuery != nullptr)
         {
             DBQueryRsp* queryRsp = dbManager->dcmFind(dsQuery);
             T_DIMSE_Message* rsp;
-            while(queryRsp->hasNext())
+            while(queryRsp != nullptr &&  queryRsp->hasNext())
             {
-                dsRspQuery = queryRsp->nextDcmQR(queryRspBSON);
+                DBResultContainer* resultContainer = queryRsp->next();
+                if (resultContainer->type() == DBResultContainerType::INVALID)
+                {
+                    delete resultContainer;
+                    delete dsQuery;
+                    break;
+                }
+                
+                dsRspQuery = (DcmDataset*)resultContainer->value();                
                 rsp = new T_DIMSE_Message;
                 rsp->CommandField = DIMSE_C_FIND_RSP;
                 strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID,assoc->params->theirImplementationClassUID);
@@ -135,21 +143,25 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
                     delete rsp;
                     break;
                 }
-                
+                delete resultContainer;
+                delete dsRspQuery;
                 delete rsp;
             }
             
             delete queryRsp;
+            
+            // sending last response
+            rsp = new T_DIMSE_Message;
+            rsp->CommandField = DIMSE_C_FIND_RSP;
+            strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID, assoc->params->theirImplementationClassUID);
+            rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_NULL;
+            rsp->msg.CFindRSP.DimseStatus = STATUS_Success;
+            rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
+            cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+            
             if (cond.good())
             {
-                // sending last response
-                rsp = new T_DIMSE_Message;
-                rsp->CommandField = DIMSE_C_FIND_RSP;
-                strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID, assoc->params->theirImplementationClassUID);
-                rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_NULL;
-                rsp->msg.CFindRSP.DimseStatus = STATUS_Success;
-                rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
-                cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+                
             }
             else
                 // TODO: notify error sending C-FIND-RSP
@@ -202,7 +214,10 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
             
             // saving the file
-            char* filename = strdup((this->m_rootFolder.c_str() + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());
+            QDir dir4save(this->m_rootFolder.c_str());
+            if (!dir4save.exists())
+                dir4save.mkpath(this->m_rootFolder.c_str());
+            char* filename = strdup((this->m_rootFolder.c_str() + (string)"/" + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());            
             ds->saveFile(filename);
             SystemManager::instance()->mpsSystem()->dbManager()->store(ds, filename);
             
@@ -295,7 +310,7 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
     {
         
         // Checking that the calling AET has permission to communicate with our server
-        MPSSystemSettings* systemSettings = Singleton<SystemManager>::instance()->mpsSystem()->settings();
+        MPSSystemSettings* systemSettings = SystemManager::instance()->mpsSystem()->settings();
         DUL_ASSOCIATESERVICEPARAMETERS* dulAssParams = &(assoc->params->DULparams);
         cout << dulAssParams->callingAPTitle << endl;
         if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle, dulAssParams->callingPresentationAddress))

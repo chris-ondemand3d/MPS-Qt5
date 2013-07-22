@@ -17,6 +17,8 @@
 #include <utils/exception/exceptions.h>
 #include <dicom/net/DIMSEMessajeFactory.h>
 #include <settings/MPSSystemSettings.h>
+#include <db/DBManager.h>
+#include <regex>
 
 
 using namespace std;

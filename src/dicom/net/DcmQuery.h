@@ -7,7 +7,8 @@
 using namespace std;
 
 
-enum class QueryLevel {
+enum class QueryLevel 
+{
     PATIENT_LEVEL = 0,
     STUDY_LEVEL = 1,
     SERIES_LEVEL = 2,

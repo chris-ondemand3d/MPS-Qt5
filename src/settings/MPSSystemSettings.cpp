@@ -48,8 +48,12 @@ bool MPSSystemSettings::insertRemoteAET(QString& aet, QString& hostname, int por
         port < 1 || port > 65535) // have space
         return false;
     
-    // everything is fine
+    // checking if exist this aet
     QSettings* settings = Singleton<MPSSystem>::instance()->settings()->settings();
+    if (settings->contains(aet))
+        return false;
+    
+    // everything is fine    
     settings->beginGroup(MPSSetting_REMOTE_AET_GROUP);
     settings->setValue(aet, aet+"@" + hostname + ":" + QVariant(port).toString());
     settings->endGroup();

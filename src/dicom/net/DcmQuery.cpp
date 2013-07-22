@@ -56,6 +56,8 @@ bool DcmQuery::validateDcmQuery(DcmDataset* ds)
         {
             elem = ds->remove(i);
             delete elem;
+            i--;
+            card--;
         }
     }
     

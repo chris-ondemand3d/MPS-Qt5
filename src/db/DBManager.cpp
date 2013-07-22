@@ -1,6 +1,7 @@
 
 #include "DBManager.h"
 #include "DBDcmTagTable.h"
+#include "DBQueryRsp.h"
 #include <settings/MPSSystemSettings.h>
 #include <system/MPSSystem.h>
 #include <system/SystemManager.h>
@@ -50,13 +51,14 @@ bool DBManager::closeConnection()
 
 bool DBManager::openConnection()
 {
-    if (this->m_mongoConn == nullptr) // Is not connected
+    if (!this->m_isConnected) // Is not connected
     {
         this->m_mongoConn = new mongo::DBClientConnection(true);
         string error;
         if (this->m_mongoConn->connect(*(this->m_mongoServer), error))
         {
-            cout << "Connection with MongoDB opened...";
+            cout << "Connection with MongoDB opened..." << endl;
+            this->m_isConnected = true;
             return true;
         }
         else
@@ -124,16 +126,13 @@ void DBManager::registerInstance(mongo::BSONObj& studyBSON,
                 {
                     vector<mongo::BSONElement> seriesList = bElem["series"].Array();
                     int pos = 0;
-                    cout << "*********************" <<endl;
                     for (mongo::BSONElement eachSeries: seriesList)
                     {
                         string seriesInstanceUID = eachSeries.Obj()["(0020,000e)"][MONGO_TAG_VALUE].String();
-                        cout << "series " << pos << ": " << seriesInstanceUID << endl;
                         if (seriesInstanceUID == seriesBSON["(0020,000e)"][MONGO_TAG_VALUE].String())         
                         {
                             string countVal = eachSeries.Obj()[tagValue][MONGO_TAG_VALUE].String();
                             long long int countStudies = atoll(countVal.c_str()) + inc;
-                            cout << "tag: " << tagValue << " countStudies: "<< countStudies << " pos: " << pos << endl;
                             stringstream convStr, strPos;
                             convStr << countStudies;
                             strPos << pos;
@@ -144,7 +143,6 @@ void DBManager::registerInstance(mongo::BSONObj& studyBSON,
                         }
                         pos++;
                     }
-                    cout << "*********************" <<endl;
                 }
                 else
                 {
@@ -190,6 +188,8 @@ void DBManager::registerInstance(mongo::BSONObj& studyBSON,
                         MONGO_TAG_VALUE << "1"
                     );
                     break;
+                    DcmDataset* xx;
+                    DcmDataset* xxx;
                 }
             }
         };
@@ -350,7 +350,10 @@ void DBManager::store(DcmDataset* ds, const string& fileName)
     // Inseting data in DB
     // getting Study Instance UID, Series Instance UID and SOP Instance UID
     // to search in data base.
-    
+    DcmXfer xfer(ds->getOriginalXfer());
+    instanceBSONBuilder << MONGO_XFER << BSON(MONGO_XFER_NAME << xfer.getXferName() <<
+                                              MONGO_XFER_UID << xfer.getXferID());
+    instanceBSONBuilder << MONGO_INSTANCE_FILENAME << fileName;
     mongo::BSONObj study = std::move(studyBSONBuilder.done());
     mongo::BSONObj series = std::move(seriesBSONBuilder.done());
     mongo::BSONObj instance = std::move(instanceBSONBuilder.done());
@@ -369,47 +372,93 @@ bool DBManager::dcmElement2BSON(DcmElement* elem, mongo::BSONObjBuilder* mongoOb
     mongo::BSONObjBuilder* data = new mongo::BSONObjBuilder();
     *data << MONGO_TAG_VR << vr->getVRName() << MONGO_TAG_VM << multiplicity;
     
-    if (elem->isEmpty())
-        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-    else
+//     if (elem->isEmpty() || multiplicity <= 0)
+//         *data << MONGO_TAG_VALUE << mongo::jstNULL;
+    
+    switch(elem->getVR())
     {
-        switch(elem->getVR())
+        case EVR_DT:
+        case EVR_TM:
+        case EVR_DA:
         {
-            case EVR_DT:
-            case EVR_TM:
-            case EVR_DA:
+            if (elem->isEmpty() || multiplicity == 0)
             {
-                if (elem->isEmpty())
+                *data << MONGO_TAG_VALUE << "";
+                break;
+            }
+            
+            OFString value;
+            elem->getOFString(value, 0);
+            string valueStr(value.c_str());
+            
+            if (multiplicity == 1)
+            {
+                long long int dtVal = atol(value.c_str());
+                if (dtVal > 0) // datetime value is fine
                 {
-                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    break;
+                    *data << MONGO_TAG_VALUE << dtVal;
                 }
-                
-                OFString value;
-                elem->getOFString(value, 0);
-                string valueStr(value.c_str());
-                
-                if (multiplicity == 1)
+                else;
+                // TODO: Notify that the datetime value has an error
+            }
+            else if (multiplicity > 1)
+            {
+                list<long long int> values;
+                string singleValue;
+                long val;
+                for (auto charVal : valueStr)
                 {
-                    long long int dtVal = atol(value.c_str());
-                    if (dtVal > 0) // datetime value is fine
+                    if (charVal == '\\')
                     {
-                        *data << MONGO_TAG_VALUE << dtVal;
+                        if ((val = atol(singleValue.c_str())) > 0)
+                            values.push_back(val);
+                        singleValue.clear();
                     }
-                    else;
-                    // TODO: Notify that the datetime value has an error
+                    else
+                    {
+                        singleValue += charVal;
+                    }
                 }
+                if ((val = atol(singleValue.c_str())) > 0)
+                    values.push_back(val);
+                *data << MONGO_TAG_VALUE << std::move(values);
+            }
+            break;
+        }
+        
+        case EVR_AS:
+        case EVR_AE:
+        case EVR_LO:
+        case EVR_LT:
+        case EVR_PN:
+        case EVR_SH:
+        case EVR_ST:
+        case EVR_UT:
+        case EVR_CS:        
+        case EVR_DS:
+        case EVR_IS:        
+        case EVR_UI:
+        {
+            if (elem->isEmpty() || multiplicity <= 0)
+            {
+                *data << MONGO_TAG_VALUE << "";
+                break;
+            }
+            OFString value;
+            if (elem->getOFString(value, 0).good())
+            {
+                string valueStr(value.c_str());
+                if (multiplicity == 1)
+                    *data << MONGO_TAG_VALUE << valueStr;
                 else if (multiplicity > 1)
-                {
-                    list<long long int> values;
+                {   
+                    list<string> bsonValues;
                     string singleValue;
-                    long val;
                     for (auto charVal : valueStr)
                     {
                         if (charVal == '\\')
                         {
-                            if ((val = atol(singleValue.c_str())) > 0)
-                                values.push_back(val);
+                            bsonValues.push_back(singleValue);
                             singleValue.clear();
                         }
                         else
@@ -417,221 +466,198 @@ bool DBManager::dcmElement2BSON(DcmElement* elem, mongo::BSONObjBuilder* mongoOb
                             singleValue += charVal;
                         }
                     }
-                    if ((val = atol(singleValue.c_str())) > 0)
-                        values.push_back(val);
-                    *data << MONGO_TAG_VALUE << std::move(values);
-                }
+                    bsonValues.push_back(singleValue);
+                    *data << MONGO_TAG_VALUE << bsonValues;
+                }              
+            }
+            else
+                *data << MONGO_TAG_VALUE << "";
+            
+            break;
+        }
+        
+        case EVR_FD:
+        {
+            if (multiplicity <= 0)
+            {
+                *data << MONGO_TAG_VALUE << 0;
                 break;
             }
-            
-            case EVR_AS:
-            case EVR_AE:
-            case EVR_LO:
-            case EVR_LT:
-            case EVR_PN:
-            case EVR_SH:
-            case EVR_ST:
-            case EVR_UT:
-            case EVR_CS:        
-            case EVR_DS:
-            case EVR_IS:        
-            case EVR_UI:
+            if (multiplicity == 1)
             {
-                OFString value;
-                if (elem->getOFString(value, 0).good())
+                double value;
+                *data << MONGO_TAG_VALUE << (elem->getFloat64(value).good() ? value : mongo::jstNULL);
+            }
+            
+            else if (multiplicity > 1)
+            {
+                set<double> bsonValues;
+                double* values;
+                
+                if (elem->getFloat64Array(values).bad())
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                else
                 {
-                    string valueStr(value.c_str());
-                    if (multiplicity == 1)
-                        *data << MONGO_TAG_VALUE << valueStr;
-                    else if (multiplicity > 1)
-                    {   
-                        list<string> bsonValues;
-                        string singleValue;
-                        for (auto charVal : valueStr)
-                        {
-                            if (charVal == '\\')
-                            {
-                                bsonValues.push_back(singleValue);
-                                singleValue.clear();
-                            }
-                            else
-                            {
-                                singleValue += charVal;
-                            }
-                        }
-                        bsonValues.push_back(singleValue);
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                    }              
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
+                    *data << MONGO_TAG_VALUE << bsonValues;
+                }
+            }
+            break;
+        }
+        
+        case EVR_FL:
+        {
+            if (multiplicity <= 0)
+            {
+                *data << MONGO_TAG_VALUE << 0;
+                break;
+            }
+            if (multiplicity == 1)
+            {
+                float value;
+                *data << MONGO_TAG_VALUE << (elem->getFloat32(value).good() ? value : mongo::jstNULL);
+            }
+            
+            else if (multiplicity > 1)
+            {
+                set<float> bsonValues;
+                float* values;
+                
+                if (elem->getFloat32Array(values).bad())
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                else
+                {
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
+                    
+                    *data << MONGO_TAG_VALUE << bsonValues;
+                }
+            }
+            break;
+        }
+        
+        case EVR_SL:
+        {
+            if (multiplicity <= 0)
+            {
+                *data << MONGO_TAG_VALUE << 0;
+                break;
+            }
+            if (multiplicity == 1)
+            {
+                
+                int value;
+                *data << MONGO_TAG_VALUE << (elem->getSint32(value).good() ? value : mongo::jstNULL);
+            }
+            else if (multiplicity > 1)
+            {
+                set<int> bsonValues;
+                int* values;
+                if (elem->getSint32Array(values).good())
+                {
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
+                    
+                    *data << MONGO_TAG_VALUE << bsonValues;
+                }                            
+                else
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
+            }
+            break;
+        }
+        
+        case EVR_SS:
+        {
+            if (multiplicity <= 0)
+            {
+                *data << MONGO_TAG_VALUE << 0;
+                break;
+            }
+            if (multiplicity == 1)
+            {
+                short value;
+                *data << MONGO_TAG_VALUE << (elem->getSint16(value).good() ? value : mongo::jstNULL);
+            }
+            
+            else if (multiplicity > 1)
+            {
+                set<short> bsonValues;
+                short* values;
+                
+                if (elem->getSint16Array(values).good())
+                {
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
+                    
+                    *data << MONGO_TAG_VALUE << bsonValues;
                 }
                 else
                     *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                
-                break;
             }
-            
-            case EVR_FD:
+            break;
+        }
+        
+        case EVR_AT:
+        case EVR_UL:
+        {
+            if (multiplicity <= 0)
             {
-                if (multiplicity == 1)
-                {
-                    double value;
-                    *data << MONGO_TAG_VALUE << (elem->getFloat64(value).good() ? value : mongo::jstNULL);
-                }
-                
-                else if (multiplicity > 1)
-                {
-                    set<double> bsonValues;
-                    double* values;
-                    
-                    if (elem->getFloat64Array(values).bad())
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    else
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                        delete values;
-                    }
-                }
+                *data << MONGO_TAG_VALUE << 0;
                 break;
             }
-            
-            case EVR_FL:
+            if (multiplicity == 1)
             {
-                if (multiplicity == 1)
-                {
-                    float value;
-                    *data << MONGO_TAG_VALUE << (elem->getFloat32(value).good() ? value : mongo::jstNULL);
-                }
-                
-                else if (multiplicity > 1)
-                {
-                    set<float> bsonValues;
-                    float* values;
-                    
-                    if (elem->getFloat32Array(values).bad())
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    else
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                        delete values;
-                    }
-                }
-                break;
+                unsigned int value;
+                *data << MONGO_TAG_VALUE << (elem->getUint32(value).good() ? value : mongo::jstNULL);
             }
-            
-            case EVR_SL:
+            else if (multiplicity > 1)
             {
-                if (multiplicity == 1)
+                set<unsigned int> bsonValues;
+                unsigned int* values;
+                if (elem->getUint32Array(values).good())
                 {
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
                     
-                    int value;
-                    *data << MONGO_TAG_VALUE << (elem->getSint32(value).good() ? value : mongo::jstNULL);
-                }
-                else if (multiplicity > 1)
-                {
-                    set<int> bsonValues;
-                    int* values;
-                    if (elem->getSint32Array(values).good())
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                    }                            
-                    else
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    
-                    delete values;
-                }
-                break;
+                    *data << MONGO_TAG_VALUE << bsonValues;
+                }       
+                else
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
             }
-            
-            case EVR_SS:
+            break;
+        }
+        
+        case EVR_US:
+        {
+            if (multiplicity <= 0)
             {
-                if (multiplicity == 1)
-                {
-                    short value;
-                    *data << MONGO_TAG_VALUE << (elem->getSint16(value).good() ? value : mongo::jstNULL);
-                }
-                
-                else if (multiplicity > 1)
-                {
-                    set<short> bsonValues;
-                    short* values;
-                    
-                    if (elem->getSint16Array(values).good())
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                    }
-                    else
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    
-                    delete values;
-                }
+                *data << MONGO_TAG_VALUE << 0;
                 break;
             }
-            
-            case EVR_AT:
-            case EVR_UL:
+            if (multiplicity == 1)
             {
-                
-                if (multiplicity == 1)
-                {
-                    unsigned int value;
-                    *data << MONGO_TAG_VALUE << (elem->getUint32(value).good() ? value : mongo::jstNULL);
-                }
-                else if (multiplicity > 1)
-                {
-                    set<unsigned int> bsonValues;
-                    unsigned int* values;
-                    if (elem->getUint32Array(values).good())
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                    }       
-                    else
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
-                    
-                    delete values;
-                }
-                break;
+                unsigned short value;
+                *data << MONGO_TAG_VALUE << (elem->getUint16(value).good() ? value : mongo::jstNULL);
             }
-            
-            case EVR_US:
+            else if (multiplicity > 1)
             {
-                if (multiplicity == 1)
+                set<unsigned short> bsonValues;
+                unsigned short* values;
+                if (elem->getUint16Array(values).good())
                 {
-                    unsigned short value;
-                    *data << MONGO_TAG_VALUE << (elem->getUint16(value).good() ? value : mongo::jstNULL);
-                }
-                else if (multiplicity > 1)
-                {
-                    set<unsigned short> bsonValues;
-                    unsigned short* values;
-                    if (elem->getUint16Array(values).good())
-                    {
-                        for (int i = 0; i < multiplicity; i++)
-                            bsonValues.insert(values[i]);
-                        
-                        *data << MONGO_TAG_VALUE << bsonValues;
-                    }
-                    else
-                        *data << MONGO_TAG_VALUE << mongo::jstNULL;
+                    for (int i = 0; i < multiplicity; i++)
+                        bsonValues.insert(values[i]);
                     
-                    delete values;
+                    *data << MONGO_TAG_VALUE << bsonValues;
                 }
-                break;
+                else
+                    *data << MONGO_TAG_VALUE << mongo::jstNULL;
             }
+            break;
         }
     }
+
     *mongoObj << tagValue << data->done();
     delete vr;
     delete data;
@@ -714,7 +740,8 @@ bool DBManager::dcmDataset2BSON(DcmDataset* ds, mongo::BSONObjBuilder& mongoObj)
 void DBManager::createElement2MongoQuery(mongo::BSONType elementType, 
                                          mongo::BSONObjBuilder& query, 
                                          mongo::BSONObjBuilder& projection, 
-                                         DcmElement* elem, QueryLevel queryLevel)
+                                         DcmElement* elem, 
+                                         QueryLevel queryLevel)
 {    
     // checking the tag level
     string strTag = elem->getTag().toString().c_str();
@@ -722,9 +749,8 @@ void DBManager::createElement2MongoQuery(mongo::BSONType elementType,
     if (tagLevel > queryLevel)
         return;
     
-    
-    mongo::BSONObjBuilder* bsonElement = new mongo::BSONObjBuilder();
-    DBManager::dcmElement2BSON(elem, bsonElement);
+    mongo::BSONObjBuilder bsonElement;
+    dcmElement2BSON(elem, &bsonElement);
     string levelString;
     
     switch(tagLevel)
@@ -747,26 +773,34 @@ void DBManager::createElement2MongoQuery(mongo::BSONType elementType,
         }
     }
     
-    string quote = "'";
-    string subfixQueryValue = quote +  levelString + strTag + "." + MONGO_TAG_VALUE + quote;
-    if (elem->isEmpty())
-        query << subfixQueryValue << BSON("$exists" << 1);
-        
-    else 
+//     string quote = "'";
+//     string subfixQueryValue = quote +  levelString + strTag + "." + MONGO_TAG_VALUE + quote;
+    if (!elem->isEmpty() && elem->getVM() > 0)
     {
-        mongo::BSONObj bElem = std::move(bsonElement->done());
+        mongo::BSONObj bElem = std::move(bsonElement.done());
+//         stringstream stringValue;
         switch(elementType)
         {
             case mongo::BSONType::NumberDouble:
             {
                 if (!bElem[strTag][MONGO_TAG_VALUE].isNull())
-                    query << subfixQueryValue << bElem[strTag][MONGO_TAG_VALUE].Double();
+                {
+                    query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'"  << bElem[strTag][MONGO_TAG_VALUE].Double(); 
+//                     stringValue.clear();
+//                     stringValue << bElem[strTag][MONGO_TAG_VALUE].Double();
+//                     query << subfixQueryValue + ":" + stringValue.str();
+                }
                 break;
             }
             case mongo::BSONType::NumberInt:
             {
                 if (!bElem[strTag][MONGO_TAG_VALUE].isNull())
-                    query << subfixQueryValue << bElem[strTag][MONGO_TAG_VALUE].Int();
+                {
+                    query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'"  << bElem[strTag][MONGO_TAG_VALUE].Int();
+//                     stringValue.clear();
+//                     stringValue << bElem[strTag][MONGO_TAG_VALUE].Int();
+//                     query += subfixQueryValue + ":" +  stringValue.str();
+                }
                 break;
             }
             case mongo::BSONType::NumberLong:
@@ -774,33 +808,81 @@ void DBManager::createElement2MongoQuery(mongo::BSONType elementType,
                 if (!bElem[strTag][MONGO_TAG_VALUE].isNull())
                 {
                     // checking if it is a DA, DT or TM type of VR
-                    if (elem->getVR() == EVR_DA || elem->getVR() == EVR_DT || elem->getVR() == EVR_TM)
+                    DcmEVR vr = elem->getVR();
+                    if (vr == EVR_DA || vr == EVR_DT || vr == EVR_TM)
                     {
-                        stringstream data;
-                        char* strValue;
-                        elem->getString(strValue);
-                        string dtStr = strValue;
+                        OFString datetime;
+                        elem->getOFString(datetime, 0);
+                        string dtStr(datetime.c_str());
+                        if (dtStr == "")
+                            break;
+                        switch(vr)
+                        {
+                            case EVR_DA:
+                            {
+                                if (dtStr.length() < 8)
+                                    // TODO: Notify this bad date error in the query field
+                                    return;
+                                break;
+                            }
+                            
+                            case EVR_TM:
+                            {
+                                if (dtStr.length() < 6)
+                                    // TODO: Notify this bad time error in the query field
+                                    return;
+                                break;
+                            }
+                            case EVR_DT:
+                            {
+                                if (dtStr.length() < 14)
+                                    // TODO: Notify this bad datetime error in the query field
+                                    return;
+                                break;
+                            }
+                        }
+                        
                         // checking if there it is a range value
                         
                         auto index = dtStr.find_first_of('-');
                         if (index != dtStr.find_last_of('-')) // checking that the character '-' appear just one time
+                            // TODO: Notify this error to the system
                             return;
                         // everything is fine
                         if (index == string::npos)// checking if the character '-' dosen't exist
-                            query << subfixQueryValue<< atoll(dtStr.c_str());
+                        {
+                            long long int dtValue = atoll(dtStr.c_str());
+                            if (dtValue == 0) // bad datetime value
+                                // TODO: Notify this error to the system
+                                return;
+                            // everything is fine
+                            query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'"  << dtValue;
+                        }
                         
                         else if (index == 0) // checking if it is a "until" query
-                            query << subfixQueryValue << BSON("$lte" << atoll(dtStr.c_str()));
+                        {
+                            long long int dtValue = atoll(dtStr.substr(1, dtStr.size() - 1).c_str());
+                            if (dtValue == 0)
+                                // TODO: Notify this error to the system
+                                return;
+                            query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'"  << 
+                            BSON("$lte" << dtValue);
+                        }
                         
                         else if (index == dtStr.length() - 1) // checking if it is a "from" query
-                            query << subfixQueryValue << BSON("$gte" << atoll(dtStr.c_str()));
-                        
-                        else // the query is a "until - from" query
                         {
-                            string dt1 = dtStr.substr(0, index + 1);
-                            string dt2 = dtStr.substr(index + 1, dtStr.length());
+                            long long int dtValue = atoi(dtStr.substr(0, dtStr.length() - 2).c_str());
+                            query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'" << 
+                            BSON("$gte" << dtValue);
+                        }
+                        
+                        else // the query is a "from - until" query
+                        {
+                            string dt1 = dtStr.substr(0, index);
+                            string dt2 = dtStr.substr(index + 1, dtStr.length() - 1);
                             
                             if (dt1.length() != dt2.length()) // error
+                                // TODO: Notify this error to the system
                                 return;
                             
                             // everything is fine
@@ -808,33 +890,66 @@ void DBManager::createElement2MongoQuery(mongo::BSONType elementType,
                             long long int dtLong1 = atoll(dt1.c_str());
                             long long int dtLong2 = atoll(dt2.c_str());
                             if (dtLong1 > dtLong2) // Error
+                                // TODO: Notify this error to the system
                                 return;
                             
                             // datetime1 and datetime2 are fine
-                            query << subfixQueryValue << BSON("$lte" << dtLong2 << "$gte" << dtLong1);
+                            /*stringValue.clear();
+                            stringValue << ":{$lte:" << dtLong2 << ",$gte:" << dtLong1 << "}";
+                            query += subfixQueryValue + stringValue.str();*/ 
+                            query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'" << 
+                            BSON("$lte" << dtLong2 << "$gte" << dtLong1);
                         }
                     }
                     else
-                        query << subfixQueryValue << bElem[strTag][MONGO_TAG_VALUE].Long();
+                    {
+//                         stringValue.clear();
+//                         stringValue << bElem[strTag][MONGO_TAG_VALUE].Long();
+//                         query += subfixQueryValue + ":" + stringValue.str();
+                        query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'"  << bElem[strTag][MONGO_TAG_VALUE].Long();
+                    }
                 }
                 break;
             }
             case mongo::BSONType::String:
             {
+                
                 if (!bElem[strTag][MONGO_TAG_VALUE].isNull())
-                    query << subfixQueryValue << bElem[strTag][MONGO_TAG_VALUE].String();
+                {
+                    string value = bElem[strTag][MONGO_TAG_VALUE].String();
+                    string parsedValue;
+                    // searching 
+                    for (auto character : value)
+                    {
+                        switch(character)    
+                        {
+                            case '*':
+                            {
+                                parsedValue += PCRE_ASTERISK_QUERY;
+                                cout << "asterisco encontrado" << endl;
+                                break;
+                            }
+                            case '?':
+                            {
+                                parsedValue += PCRE_INTERROGATION_QUERY;
+                                break;
+                            }
+                            default:
+                            {
+                                parsedValue += character;
+                            }
+                        }
+                    }
+                    query << string("'") + levelString + strTag + "." + MONGO_TAG_VALUE + "'" << 
+                    BSON("$regex" << parsedValue << "$options" << "i");
+                }
                 break;
             }
         }
         
     }
+    projection << levelString + strTag << 1;
     
-    projection << subfixQueryValue << 1;
-    if (bsonElement != nullptr)
-    {
-        delete bsonElement;
-        bsonElement = nullptr;
-    }
 }
 
 
@@ -879,14 +994,15 @@ mongo::BSONType DBManager::bsonTypeFromDcmVR(DcmEVR vr)
 
 DBQueryRsp* DBManager::dcmFind(DcmDataset* ds)
 {
-    mongo::BSONObjBuilder dcmQueryBSON;
-    mongo::BSONObjBuilder query, projection;    
+    mongo::BSONObjBuilder projection;  
+    mongo::BSONObjBuilder query;
     unsigned long card = ds->card();
     
     OFString queryLevel;
     if (ds->findAndGetOFString(DCM_QueryRetrieveLevel, queryLevel).bad())
         return nullptr;
     
+    QueryLevel qLevel = DcmQuery::str2QueryLevel((string)queryLevel.c_str());
     for (unsigned long i = 0; i < card; i++)
     {
         DcmElement* dcmElement = ds->getElement(i);
@@ -894,19 +1010,24 @@ DBQueryRsp* DBManager::dcmFind(DcmDataset* ds)
                                             query,
                                             projection,
                                             dcmElement,
-                                            DcmQuery::str2QueryLevel((string)queryLevel.c_str()));
+                                            qLevel);
     }
-    mongo::BSONObj fieldsToReturn = std::move(projection.done());
-    cout << "projection: " << projection.obj() << endl << "query: " << query.done() << endl;
-    unique_ptr<mongo::DBClientCursor> cursor = this->m_mongoConn->query(DB_STUDIES_COLLECTION,
-                                                                        mongo::Query(std::move(query.done())),
+    mongo::BSONObj fieldsToReturn = projection.done();
+    mongo::BSONObj objQuery = query.done();
+    mongo::Query mongoQuery(objQuery.toString(false,true));
+    
+    cout << "query: " << mongoQuery.toString() << endl;
+    if (mongoQuery.obj.isEmpty())
+        return nullptr;
+    
+    this->openConnection();
+    auto_ptr<mongo::DBClientCursor> cursor = this->m_mongoConn->query(DB_STUDIES_COLLECTION,
+                                                                        mongoQuery,
                                                                         0,
                                                                         0,
                                                                         &fieldsToReturn);
-    if (cursor->more())
-        return new DBQueryRsp(cursor);
-    
-    return nullptr;
+    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QUERY_RETRIEVE);    
+    return rsp;
 }
 
 
@@ -924,6 +1045,7 @@ void DBManager::setValue(mongo::BSONType typeBSON,
     
     string queryLevel = queryBSON[string(DCM_QueryRetrieveLevel.toString().c_str())][MONGO_TAG_VALUE].String();
     string tagValue = (string)elem->getTag().toString().c_str();
+    
     
     
     switch(typeBSON)
@@ -972,10 +1094,16 @@ DcmDataset* DBManager::bson2DcmDataset(mongo::BSONObj& mongoObj)
     int card = mongoObj.nFields();
     DcmDataset* ds = new DcmDataset();
     
-    for (int i = 0; i < card; i++)
+    set<string> fields;
+    mongoObj.getFieldNames(fields);
+    
+    for (auto objElem : fields)
     {
-        mongo::BSONObj mongoElem = mongoObj[i].Obj();
-        DcmElement* elem = DBManager::bson2DcmElement(mongoElem);
+        if (objElem == "_id")
+            continue;
+        
+        mongo::BSONElement bsonElem = mongoObj[objElem];
+        DcmElement* elem = DBManager::bson2DcmElement(bsonElem);
         if (elem == nullptr)
             return nullptr;
         
@@ -986,14 +1114,17 @@ DcmDataset* DBManager::bson2DcmDataset(mongo::BSONObj& mongoObj)
     return ds;
 }
 
-DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
+DcmElement* DBManager::bson2DcmElement(mongo::BSONElement& mongoElem)
 {
-    string vrValue = mongoObj[0][MONGO_TAG_VALUE].toString(false);
     int group, element;
-    if (!DBManager::strTag2DcmTag(mongoObj, group, element))
+    string fieldName(mongoElem.fieldName());
+    
+    if (!DBManager::strTag2DcmTag(fieldName, group, element))
         return nullptr;
     
-    DcmTag dcmTag(group, element);
+    DcmTagKey dcmTag(group, element);    
+    mongo::BSONObj mongoObj = mongoElem.Obj();
+    string vrValue = mongoObj[MONGO_TAG_VR].String();
     DcmElement* dcmElem = nullptr;
     int multiplicity = mongoObj[MONGO_TAG_VM].Int();
     if (vrValue == "LO" || vrValue == "LT" || vrValue == "PN" || vrValue == "SH" || vrValue == "ST" ||
@@ -1004,13 +1135,13 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
         string value;
         if (multiplicity == 1)
             value = mongoObj[MONGO_TAG_VALUE].str();
-        else
+        else if (multiplicity > 1)
         {
             vector<mongo::BSONElement> values = mongoObj[MONGO_TAG_VALUE].Array();
             int mult = multiplicity;
-            for (vector<mongo::BSONElement>::iterator it = values.begin(), end = values.end(); it < end; it++)
+            for (auto val : values)
             {
-                value += *it;
+                value += val;
                 if (mult > 0)
                 {
                     value+= "/";
@@ -1042,8 +1173,11 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
         else 
             return nullptr;
         
-        OFString dcmValue(value.c_str());
-        dcmElem->putOFStringArray(dcmValue);
+        if (multiplicity >= 1)
+        {
+            OFString dcmValue(value.c_str());
+            dcmElem->putOFStringArray(dcmValue);
+        }
     }
     else if (vrValue == "FD" || vrValue == "FL")
     {
@@ -1075,8 +1209,6 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
                 dcmElem->putFloat64(value);
             else if (multiplicity > 1)
                 dcmElem->putFloat64Array(valueArr, multiplicity);
-            else
-                return nullptr;
         }
         else if (vrValue == "FL")
         {
@@ -1084,7 +1216,6 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
                 dcmElem->putFloat64(value);
             else if (multiplicity > 1)
                 dcmElem->putFloat64Array(valueArr, multiplicity);
-            return nullptr;
         }
         
     }
@@ -1171,13 +1302,10 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
                 }
             }
         }
-        else
-            return nullptr;
     }
     
     else if (vrValue == "DA" || vrValue == "DT" || vrValue == "TM")
     {
-        DcmElement* dcmElem = nullptr;
         long long int value;
         long long int* valueArr;
         if (vrValue == "TM")
@@ -1209,31 +1337,53 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONObj& mongoObj)
     return dcmElem;
 }
 
-bool DBManager::strTag2DcmTag(mongo::BSONObj& mongoObj, int& group, int& element)
+bool DBManager::strTag2DcmTag(string strTag, int& group, int& element)
 {
-    set<string> setField;
-    mongoObj.getFieldNames(setField);
-    set<string>::iterator begin = setField.begin();
- 
-    bool conversion = false;
-    string strTag = *begin, groupStr, elementStr;
+    bool conversion = false, comma = false;
+    stringstream groupStr, elementStr;
     if (strTag.size() != 11)
         return false;
     
-    for (int i = 0; i < 11; i++)
+    for (auto character : strTag)
     {
-        if (strTag[i] == '(' ||
-            strTag[i] == ')' ||
-            strTag[i] == ',')
-            continue;
-        else if (i < 5)
-            groupStr += strTag[i];
-        else
-            elementStr += strTag[i];
+        switch(character)
+        {
+            case ',':
+            {
+                comma = true;
+                break;
+            }
+            case ')':
+            case '(':
+            {
+                break;
+            }
+            case 'a':
+            case 'A':
+            case 'b':
+            case 'B':
+            case 'c':
+            case 'C':
+            case 'd':
+            case 'D':
+            case 'f':
+            case 'F':
+            {
+                !comma ? groupStr << character : elementStr << character;
+                break;
+            }
+            default:
+            {
+                if (isdigit(character) != 0)                    
+                    !comma ? groupStr << character : elementStr << character;
+                else
+                    return false;
+            }       
+        }
     }
     // Group and Element are ready
-    QByteArray groupBA(groupStr.c_str()); 
-    QByteArray elemBA(elementStr.c_str());
+    QByteArray groupBA(groupStr.str().c_str()); 
+    QByteArray elemBA(elementStr.str().c_str());
     // converting
     group = groupBA.toInt(&conversion, 16);
     if (!conversion)

@@ -21,6 +21,12 @@
 #define MONGO_TAG_VR                            string("VR")
 #define MONGO_TAG_VM                            string("VM")
 #define MONGO_TAG_VALUE                         string("value")
+#define MONGO_XFER                              string("Transfer Syntax")
+#define MONGO_XFER_UID                          string("tsUID")
+#define MONGO_XFER_NAME                         string("tsName")
+#define MONGO_INSTANCE_FILENAME                 string("filename")
+#define PCRE_ASTERISK_QUERY                     string(".*")
+#define PCRE_INTERROGATION_QUERY                string(".?")
 
 
 using namespace std;
@@ -52,7 +58,7 @@ private:
                                   QueryLevel queryLevel);
     
     
-    static bool strTag2DcmTag(mongo::BSONObj& mongoObj, int& group, int& element);
+    static bool strTag2DcmTag(string strTag, int& group, int& element);
     
 public:
     DBManager();
@@ -63,7 +69,7 @@ public:
     void store(DcmDataset* ds, const string& fileName);
     static bool dcmDataset2BSON(DcmDataset* ds, mongo::BSONObjBuilder& mongoObj);
     static bool dcmElement2BSON(DcmElement* elem, mongo::BSONObjBuilder* mongoObj);
-    static DcmElement* bson2DcmElement(mongo::BSONObj& mongoObj);
+    static DcmElement* bson2DcmElement(mongo::BSONElement& mongoObj);
     static DcmDataset* bson2DcmDataset(mongo::BSONObj& mongoObj);
     static mongo::BSONType bsonTypeFromDcmVR(DcmEVR vr);
     

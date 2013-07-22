@@ -12,6 +12,7 @@ find_package(Qt5Widgets)
 
 add_executable(
 mps-qt5 
+src/db/DBResultContainer.cpp 
 src/db/DBQueryRsp.cpp 
 src/settings/MPSSystemSettings.cpp 
 src/db/DBDcmTagTable.cpp 
@@ -69,15 +70,10 @@ target_link_libraries(  mps-qt5
                         /home/freddy/.local/lib/libdcmsr.so
                         /home/freddy/.local/lib/libdcmtls.so
                         /home/freddy/.local/lib/libdcmwlm.so
-                        
-                        # BOOS LIBRARIES
-                        /usr/lib/libboost_system.so
-			/usr/lib/libboost_thread.so
-			/usr/lib/libboost_filesystem.so
-			
-			/usr/lib/libmongoclient.a
-			/usr/lib/libpthread.so
-                        
+                        libboost_system.so
+                        libboost_thread.so
+                        libboost_filesystem.so                        
+                        libmongoclient.so
                         libpthread.so
                         libz.so
                      )
