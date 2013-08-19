@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string.h>
+#include <settings/MPSSystemSettings.h>
 
 using namespace std;
 
@@ -10,11 +11,12 @@ using namespace std;
 
 class DcmAET
 {
-    
+
 private:
     string m_aet;
     string m_hostname;
     int m_port;
+    
     
 public:
     DcmAET(const string& aet, const string& hostname, int port);

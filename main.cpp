@@ -21,6 +21,13 @@
 #include <QCryptographicHash>
 #include <locale>
 #include <string>
+#include <dcmtk/dcmdata/dccodec.h>
+#include <dcmtk/dcmdata/dcrledrg.h>
+#include <dcmtk/dcmdata/dcrleerg.h>
+#include <dcmtk/dcmjpeg/djdecode.h>
+#include <dcmtk/dcmjpeg/djencode.h>
+#include <dcmtk/dcmjpls/djdecode.h>
+#include <dcmtk/dcmjpls/djencode.h>
 
 
 using namespace std;
@@ -33,7 +40,28 @@ void aaa(DcmElement* elem)
 
 int main(int argc, char** argv)
 {
-//     string x = "1234-5678";
+//     DcmFileFormat f;
+//     f.loadFile("/home/freddy/XA_DCMTK.dcm");
+//     E_TransferSyntax ts = f.getDataset()->getOriginalXfer();
+// //     DcmRLEDecoderRegistration::registerCodecs();
+// //     DcmRLEEncoderRegistration::registerCodecs();
+//     DJDecoderRegistration::registerCodecs();
+// //     DJEncoderRegistration::registerCodecs();
+// //     DJLSDecoderRegistration::registerCodecs();
+// //     DJLSEncoderRegistration::registerCodecs();
+//     DcmDataset* ds = f.getDataset();
+//     ds->chooseRepresentation(EXS_LittleEndianImplicit, nullptr);
+//     if (ds->canWriteXfer(EXS_LittleEndianImplicit, ds->getOriginalXfer()))
+//     {
+//         cout << "writing new file: " << endl;
+//         f.loadAllDataIntoMemory();
+//         f.saveFile("/home/freddy/XA_DCMTK-other.dcm", EXS_LittleEndianImplicit);
+//     }
+//     else
+//         cout << "Error" << endl;
+//     DJDecoderRegistration::cleanup();
+//     exit(0);
+    //     string x = "1234-5678";
 //     int p = x.find_first_of('-');
 //     cout << x.substr(p + 1, x.length() - 1) << endl << x.substr(0,p);
 //     
@@ -98,7 +126,7 @@ int main(int argc, char** argv)
     DcmAET server("DCM4CHEE", "localhost", 11112);
     QApplication app1(argc, argv);
     SystemManager::instance()->registerRemoteDcmAET(server1);
-    SystemManager::instance()->mpsSystem()->startDicomServer();
+    SystemManager::instance()->initApp();
     return app1.exec();
 
     

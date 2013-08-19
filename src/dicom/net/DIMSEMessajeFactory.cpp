@@ -92,7 +92,8 @@ Status DIMSEMessajeFactory::newCFindRQ(T_DIMSE_Message* msg, DIC_US msgID, char*
 
 Status DIMSEMessajeFactory::newCFindRSP(T_DIMSE_Message* msg, 
                                         DIC_US msgIDToRespond, 
-                                        char* affectedSOPClassUID, 
+                                        char* affectedSOPClassUID,
+                                        T_DIMSE_DataSetType dsType,
                                         DIC_US status)
 {
     if (msgIDToRespond < 0 || msgIDToRespond % 2 == 0)
@@ -102,7 +103,7 @@ Status DIMSEMessajeFactory::newCFindRSP(T_DIMSE_Message* msg,
     
     // Everything is find
     strcpy(msg->msg.CFindRSP.AffectedSOPClassUID, affectedSOPClassUID);
-    msg->msg.CFindRSP.DataSetType = DIMSE_DATASET_PRESENT;
+    msg->msg.CFindRSP.DataSetType = dsType;
     msg->msg.CFindRSP.DimseStatus = status;
     msg->msg.CFindRSP.MessageIDBeingRespondedTo = msgIDToRespond;
     msg->CommandField = DIMSE_C_FIND_RSP;

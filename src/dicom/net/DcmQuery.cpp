@@ -28,10 +28,29 @@ DcmQuery::DcmQuery(DcmDataset* ds)
     }
 }
 
-
-bool DcmQuery::validateDcmQuery(DcmDataset* ds)
+QueryLevel DcmQuery::validateDcmQRMoveQuery(DcmDataset* ds)
 {
-    if (ds == nullptr)
+    if (ds == nullptr || ds->card() == 0)
+        return QueryLevel::INVALID_VALUE;
+    
+    // checking the each level key
+    DcmElement* dcmElement = nullptr;
+    if (ds->findAndGetElement(DCM_StudyInstanceUID, dcmElement).bad())
+        return QueryLevel::INVALID_VALUE;
+    
+    if (ds->findAndGetElement(DCM_SeriesInstanceUID, dcmElement).bad())
+        return QueryLevel::STUDY_LEVEL;
+    
+    if (ds->findAndGetElement(DCM_SOPInstanceUID, dcmElement).bad())
+        return QueryLevel::SERIES_LEVEL;
+    
+    return QueryLevel::IMAGE_LEVEL;
+}
+
+
+bool DcmQuery::validateDcmQRFindQuery(DcmDataset* ds)
+{
+    if (ds == nullptr || ds->card() == 0)
         return false;
     
     OFString strValue;
@@ -42,6 +61,36 @@ bool DcmQuery::validateDcmQuery(DcmDataset* ds)
     QueryLevel queryLevel = DcmQuery::str2QueryLevel(strValue.c_str());
     if (queryLevel == QueryLevel::INVALID_VALUE)
         return false;
+    
+    DcmElement* dcmElement;
+    switch(queryLevel)
+    {
+        case QueryLevel::PATIENT_LEVEL:
+        case QueryLevel::STUDY_LEVEL:
+        {
+            if (ds->findAndGetElement(DCM_StudyInstanceUID, dcmElement).bad())
+                // TODO: Notify this error
+                return false;
+            break;
+        }
+        
+        case QueryLevel::SERIES_LEVEL:
+        {
+            if (ds->findAndGetElement(DCM_StudyInstanceUID, dcmElement).bad() ||
+                ds->findAndGetElement(DCM_SeriesInstanceUID, dcmElement).bad())
+                // TODO: Notify this error
+                return false;
+            break;
+        }
+        case QueryLevel::IMAGE_LEVEL:
+        {
+            if (ds->findAndGetElement(DCM_StudyInstanceUID, dcmElement).bad() ||
+                ds->findAndGetElement(DCM_SeriesInstanceUID, dcmElement).bad() || 
+                ds->findAndGetElement(DCM_SOPInstanceUID, dcmElement).bad())
+                // TODO: Notify this error
+                return false;
+        }
+    }
     
     // checking each tag level
     int card = ds->card();

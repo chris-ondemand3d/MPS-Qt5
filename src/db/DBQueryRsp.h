@@ -15,7 +15,8 @@ using namespace std;
 
 enum class DBQueryType
 {
-    DICOM_QUERY_RETRIEVE,
+    DICOM_QR_FIND,
+    DICOM_QR_MOVE,
 };
 
 class DBQueryRsp
@@ -37,7 +38,6 @@ public:
     DBQueryRsp( auto_ptr< mongo::DBClientCursor >& cursor, QueryLevel queryLevel, DBQueryType type);
     DBResultContainer* next();
     inline QueryLevel dcmQueryLevel() const{return this->m_dcmQueryLevel;}
-    DcmDataset* nextDcmQRRsp();
     bool hasNext();
     
     ~DBQueryRsp();

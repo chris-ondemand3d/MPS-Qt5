@@ -3,12 +3,14 @@
 #define DBRESULTCONTAINER_H
 
 #include <dcmtk/dcmdata/dcdatset.h>
+#include "DBQRMoveContainer.h"
 #include <mongo/bson/bson.h>
 
 enum class DBResultContainerType
 {
     DCMTK_DATASET,
     MONGO_BSON_OBJECT,
+    DB_QR_MOVE,
     INVALID,
 };
 
@@ -16,6 +18,7 @@ union DBResultData
 {
     DcmDataset* ds = nullptr;
     mongo::BSONObj* bsonObject;
+    DBQRMoveContainer* moveDcmFile;
 };
 
 class DBResultContainer

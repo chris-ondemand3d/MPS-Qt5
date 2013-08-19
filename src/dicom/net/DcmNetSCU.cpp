@@ -83,21 +83,35 @@ Status DcmNetSCU::negociateAllPresentationContext(T_ASC_Association** assoc,
     char** ts = TransferSyntax::instance()->dcmtkXFerList();
     char** sopClass = SOPClass::instance()->sopClassUIDList();
     Status result(StatusResult::Success, "Association Negotiation Success.");
-
+    OFCondition cond;
+    
     int pcID = 1;
-    for (int i = 0; i < SOPClass::instance()->count(); i++, pcID++)
+    int sopClassCount = SOPClass::instance()->count();
+    int tsCount = TransferSyntax::instance()->count();
+    for (int i = 0; i < sopClassCount; i++)
     {
-        ASC_addPresentationContext(*params,
-                                   pcID,
-                                   (const char*)sopClass[i],
-                                   (const char**)ts,
-                                   TransferSyntax::instance()->count());
+        for (int j = 0; j < tsCount; j++)
+        {
+            char** tsPC = new char*[1];
+            tsPC[0] = strdup(ts[j]);
+            cond = ASC_addPresentationContext(*params,
+                                              pcID,
+                                              const_cast<char*>(sopClass[i]),
+                                              (const char**)tsPC,
+                                              1);
+            if (cond.bad())
+                cout << cond.text() << endl;
+            delete tsPC[0];
+            delete [] tsPC;
+            pcID += 2;
+        }
     }
 
-    OFCondition cond(ASC_requestAssociation(*network, *params, assoc));
+    cond = ASC_requestAssociation(*network, *params, assoc);
     if (cond.bad())
         result = Status(StatusResult::AssociationError, cond.text());
-        
+    
+    cout << "Acepted Presentation Context:" << ASC_countAcceptedPresentationContexts(*params) << endl;
     return result;
 }
 
@@ -189,7 +203,7 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, FileManager& directory, int timeo
     return result;
 }
 
-Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int timeout)
+Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const list< string >& files, int timeout)
 {
     OFCondition cond;
     T_ASC_Association* assoc;
@@ -227,14 +241,11 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int 
         {
             OFString sopClassUID;
             OFString sopInstanceUID;
-            OFIterator<string> it = files.begin();
-            int filesCount = files.size();
-            for (int i = 0; i < filesCount; i++)
+            for (string filename : files)
             {
                 DcmFileFormat* dcmfile = new DcmFileFormat();                                
                 T_ASC_PresentationContextID pcID;
-                char* filename = strdup((*it).c_str());
-                if (dcmfile->loadFile(filename).good())
+                if (dcmfile->loadFile(filename.c_str()).good())
                 {
                     DcmDataset* ds = dcmfile->getDataset();
                     ds->findAndGetOFString(DCM_SOPClassUID, sopClassUID);
@@ -258,12 +269,12 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int 
                         {
                             T_DIMSE_Message respMsg;
                             cond = DIMSE_receiveCommand(assoc, DIMSE_BLOCKING, timeout, &pcID, &respMsg, nullptr);
+                            // TODO: Checking response status
                         }
                     }                    
                     delete xferUID;
                     delete abstractSyntax;
                 }
-                delete filename;
                 delete dcmfile;
                 
             }
@@ -281,12 +292,63 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const OFList<string>& files, int 
     return result;
 }
 
+
+OFCondition DcmNetSCU::cstore_RQ(DcmAET& remoteAET, const string& file, T_ASC_Association* assoc, int timeout)
+{
+    Status result(StatusResult::Success, "C-STORE Success");
+    OFCondition cond;
+    
+    DcmFileFormat* dcmFile = new DcmFileFormat();
+    OFString sopClassUID, xferUID, sopInstanceUID;
+    if (dcmFile->loadFile(file.c_str()).good())
+    {
+        DcmDataset* ds = dcmFile->getDataset();
+        ds->findAndGetOFString(DCM_SOPClassUID, sopClassUID);
+        ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
+        xferUID = OFString(DcmXfer(ds->getOriginalXfer()).getXferID());
+        T_ASC_PresentationContextID pcID = ASC_findAcceptedPresentationContextID(assoc,
+                                                                                 const_cast<char*>(sopClassUID.c_str()),
+                                                                                 const_cast<char*>(xferUID.c_str()));
+        if (pcID == 0)
+            return OFCondition(2000, 2000, OF_error, "Bad Presentation Context");
+        if (ASC_countAcceptedPresentationContexts(assoc->params) > 0) // Checking accepted presentation context
+        {
+            
+            if (pcID != 0) // Presentation Context was accepted
+            {
+                T_DIMSE_Message reqMsg;
+                T_DIMSE_C_StoreRQ* req = &(reqMsg.msg.CStoreRQ);
+                DcmDataset* statusDetail = nullptr;
+                reqMsg.CommandField = DIMSE_C_STORE_RQ;
+                req->MessageID = assoc->nextMsgID++;
+                strcpy(req->AffectedSOPClassUID, sopClassUID.c_str());
+                strcpy(req->AffectedSOPInstanceUID, sopInstanceUID.c_str());
+                req->Priority = DIMSE_PRIORITY_MEDIUM;
+                req->DataSetType = DIMSE_DATASET_PRESENT;
+                cond = DIMSE_sendMessageUsingMemoryData(assoc, pcID, &reqMsg, statusDetail, ds, nullptr, nullptr);
+                if (cond.good())
+                {
+                    T_DIMSE_Message rsp;
+                    cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 0, &pcID, &rsp, nullptr, nullptr); 
+                    // TODO: Checking response status
+                    cout << "Response Status for C-MOVE Suboperation: " << cond.text() << endl;
+                }
+            }
+        }
+    }
+    
+    delete dcmFile;
+    return cond;;
+}
+
+
+
 Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const string& file, int timeout)
 {
+    Status result(StatusResult::Success, "C-STORE Success");
     OFCondition cond;
     T_ASC_Network* network;
     T_ASC_Association* assoc;
-    Status result(StatusResult::Success, "C-STORE Success");
 
     cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 0, &network);
     if (cond.good())
@@ -316,20 +378,19 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const string& file, int timeout)
                                          this->m_localAet->hostname().c_str(),
                                          remoteAet4Dcmtk
             );
-
-            std::cout<<"SOP Class UID: " <<sopClassUID.c_str() << std::endl;
-            std::cout<<"Transfer Syntax UID: " <<xferUID.c_str() << std::endl;
+            
             char** xferList = new char*[1];
-            xferList[0] = (char*)xferUID.c_str();
+            xferList[0] = strdup(DcmXfer(EXS_LittleEndianImplicit).getXferID());
             ASC_addPresentationContext(params, 1, sopClassUID.c_str(), (const char**)xferList, 1);
-            if ((cond = ASC_requestAssociation(network, params, &assoc)).good())
+            if ((cond = ds->chooseRepresentation(EXS_LittleEndianImplicit, nullptr)).good() && 
+                (cond = ASC_requestAssociation(network, params, &assoc)).good())
             {
                 // Checking
                 if (ASC_countAcceptedPresentationContexts(params) > 0) // Checking accepted presentation context
                 {
                     T_ASC_PresentationContextID pcID = ASC_findAcceptedPresentationContextID(assoc,
-                                                                                             (const char*)sopClassUID.c_str(),
-                                                                                             (const char*)xferUID.c_str());
+                                                                                             const_cast<char*>(sopClassUID.c_str()),
+                                                                                             const_cast<char*>(xferUID.c_str()));
                     if (pcID != 0) // Presentation Context was accepted
                     {
                         T_DIMSE_Message reqMsg;
@@ -372,6 +433,9 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const string& file, int timeout)
             }
 //             ASC_destroyAssociation(&assoc);
                ASC_dropAssociation(assoc);
+               delete xferList[0];
+               delete [] xferList;
+               delete remoteAet4Dcmtk;
         }
         else
             result = Status(StatusResult::NotExistDicomFile, file + " is not a valid DICOM file.");;

@@ -62,7 +62,8 @@ private:
     
 public:
     DBManager();
-    DBQueryRsp* dcmFind(DcmDataset* ds);
+    DBQueryRsp* dcmQRFind(DcmDataset* queryDS);
+    DBQueryRsp* dcmQRMove(DcmDataset* queryDS);
     bool openConnection();
     bool closeConnection();
     void runMongoFunction(string mongoFunction, mongo::BSONArray& funcParams);

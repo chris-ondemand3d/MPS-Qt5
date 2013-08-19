@@ -27,7 +27,7 @@ public:
     static Task* newEchoSCPTask(DcmNetSCP* scp, T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
     static Task* newStoreSCP(DcmNetSCP* scp, T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
     static Task* newQRFindSCP(DcmNetSCP* scp, T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
-    static Task* newQRMoveSCP(DcmNetSCP* scp, T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
+    static Task* newQRMoveSCP(DcmNetSCP* scp, T_ASC_Association* assoc, T_ASC_PresentationContextID idPC, string moveDestination);
     
     static Task* newHandleRqDCMConn(DcmNetSCP* scp, T_ASC_Network* net, T_ASC_Association* assoc);
     

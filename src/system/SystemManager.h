@@ -18,6 +18,7 @@ private:
 public:
     inline MPSSystem* mpsSystem() {return this->m_system;}
     bool registerRemoteDcmAET(const DcmAET& remoteAET);
+    void initApp();
     ~SystemManager();
 };
 

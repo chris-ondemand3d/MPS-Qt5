@@ -65,6 +65,7 @@ bool DBManager::openConnection()
         {
             delete this->m_mongoConn;
             this->m_mongoConn = nullptr;
+            cout << "Connection Error with MongoDB Server: " + error << endl;
         }
     }
     
@@ -114,10 +115,7 @@ void DBManager::registerInstance(mongo::BSONObj& studyBSON,
                                                                                 query,
                                                                                 0,
                                                                                 0,
-                                                                                &proj
-                                                                               );
-
-            
+                                                                                &proj);
             
             while (cursor->more()) // the study exist in the database
             {
@@ -991,21 +989,74 @@ mongo::BSONType DBManager::bsonTypeFromDcmVR(DcmEVR vr)
     return mongo::EOO;
 }
 
-
-DBQueryRsp* DBManager::dcmFind(DcmDataset* ds)
+DBQueryRsp* DBManager::dcmQRMove(DcmDataset* queryDS)
 {
     mongo::BSONObjBuilder projection;  
     mongo::BSONObjBuilder query;
-    unsigned long card = ds->card();
+    unsigned long card = queryDS->card();
     
     OFString queryLevel;
-    if (ds->findAndGetOFString(DCM_QueryRetrieveLevel, queryLevel).bad())
+    if (queryDS->findAndGetOFString(DCM_QueryRetrieveLevel, queryLevel).bad())
         return nullptr;
     
     QueryLevel qLevel = DcmQuery::str2QueryLevel((string)queryLevel.c_str());
     for (unsigned long i = 0; i < card; i++)
     {
-        DcmElement* dcmElement = ds->getElement(i);
+        DcmElement* dcmElement = queryDS->getElement(i);
+        DBManager::createElement2MongoQuery(DBManager::bsonTypeFromDcmVR(dcmElement->getVR()),
+                                            query,
+                                            projection,
+                                            dcmElement,
+                                            qLevel);
+    }
+    mongo::BSONObjBuilder projMove;
+    projMove << "series.instances.Transfer\ Syntax" << 1 << 
+                "series.instances.filename" << 1  <<
+                "series.instances.(0008,0016)" << 1;
+                
+    if (qLevel >= QueryLevel::STUDY_LEVEL || qLevel >= QueryLevel::PATIENT_LEVEL)
+        projMove << 
+        "(0008,0061)" << 1 <<
+        "(0020,1208)" << 1 <<
+        "(0020,1206)" << 1;
+        
+    if (qLevel >= QueryLevel::SERIES_LEVEL)
+        projMove << "(0020,1209)" << 1;
+    
+    
+    mongo::BSONObj fieldsToReturn = projMove.done();
+    mongo::BSONObj objQuery = query.done();
+    mongo::Query mongoQuery(objQuery.toString(false,true));
+    
+    if (mongoQuery.obj.isEmpty())
+        return nullptr;
+    
+    this->openConnection();
+    cout << "Mongo Move Query: " << mongoQuery.toString() << endl;
+    auto_ptr<mongo::DBClientCursor> cursor = this->m_mongoConn->query(DB_STUDIES_COLLECTION,
+                                                                      mongoQuery,
+                                                                      0,
+                                                                      0,
+                                                                      &fieldsToReturn);
+    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QR_MOVE);    
+    return rsp;
+}
+
+
+DBQueryRsp* DBManager::dcmQRFind(DcmDataset* queryDS)
+{
+    mongo::BSONObjBuilder projection;  
+    mongo::BSONObjBuilder query;
+    unsigned long card = queryDS->card();
+    
+    OFString queryLevel;
+    if (queryDS->findAndGetOFString(DCM_QueryRetrieveLevel, queryLevel).bad())
+        return nullptr;
+    
+    QueryLevel qLevel = DcmQuery::str2QueryLevel((string)queryLevel.c_str());
+    for (unsigned long i = 0; i < card; i++)
+    {
+        DcmElement* dcmElement = queryDS->getElement(i);
         DBManager::createElement2MongoQuery(DBManager::bsonTypeFromDcmVR(dcmElement->getVR()),
                                             query,
                                             projection,
@@ -1016,7 +1067,6 @@ DBQueryRsp* DBManager::dcmFind(DcmDataset* ds)
     mongo::BSONObj objQuery = query.done();
     mongo::Query mongoQuery(objQuery.toString(false,true));
     
-    cout << "query: " << mongoQuery.toString() << endl;
     if (mongoQuery.obj.isEmpty())
         return nullptr;
     
@@ -1026,7 +1076,7 @@ DBQueryRsp* DBManager::dcmFind(DcmDataset* ds)
                                                                         0,
                                                                         0,
                                                                         &fieldsToReturn);
-    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QUERY_RETRIEVE);    
+    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QR_FIND);    
     return rsp;
 }
 
@@ -1124,6 +1174,7 @@ DcmElement* DBManager::bson2DcmElement(mongo::BSONElement& mongoElem)
     
     DcmTagKey dcmTag(group, element);    
     mongo::BSONObj mongoObj = mongoElem.Obj();
+    cout << mongoObj.toString(false,true) << endl;
     string vrValue = mongoObj[MONGO_TAG_VR].String();
     DcmElement* dcmElem = nullptr;
     int multiplicity = mongoObj[MONGO_TAG_VM].Int();

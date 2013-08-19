@@ -26,7 +26,8 @@ public:
                              char* affectedSOPClassUID);
     static Status newCFindRSP(T_DIMSE_Message* msg, 
                               DIC_US msgIDToRespond,
-                              char* affectedSOPClassUID,
+                              char* affectedSOPClassUID, 
+                              T_DIMSE_DataSetType dsType, 
                               DIC_US status);
     
     static Status newCMoveRQ(T_DIMSE_Message* msg, 

@@ -12,6 +12,7 @@ find_package(Qt5Widgets)
 
 add_executable(
 mps-qt5 
+src/db/DBQRMoveContainer.cpp 
 src/db/DBResultContainer.cpp 
 src/db/DBQueryRsp.cpp 
 src/settings/MPSSystemSettings.cpp 

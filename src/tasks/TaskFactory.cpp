@@ -35,10 +35,11 @@ Task* TaskFactory::newQRFindSCU(DcmNetSCU* scu,
 }
 
 Task* TaskFactory::newQRMoveSCP(DcmNetSCP* scp, 
-                                          T_ASC_Association* assoc, 
-                                          T_ASC_PresentationContextID idPC)
+                                T_ASC_Association* assoc, 
+                                T_ASC_PresentationContextID idPC, 
+                                string moveDestination)
 {
-    return new TaskQRMoveSCP(scp, assoc, idPC);
+    return new TaskQRMoveSCP(scp, assoc, idPC, moveDestination);
 }
 
 Task* TaskFactory::newQRMoveSCU(DcmNetSCU* scu, 

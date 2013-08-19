@@ -1,9 +1,38 @@
 #include "SystemManager.h"
+#include <system_error>
 
 SystemManager::SystemManager()
 {
     this->m_system = new MPSSystem();
 }
+
+void SystemManager::initApp()
+{
+    try
+    {
+        if (!this->m_system->dbManager()->openConnection())
+            throw system_error(make_error_code(std::errc::host_unreachable), 
+                               "MongoDB server is no running.");
+            else
+                this->m_system->startDicomServer();
+    }
+    catch (std::exception& except)
+    {
+        cout << "MPS1.0-> Error: " << except.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+    catch(mongo::DBException& except)
+    {
+        cout << "MPS1.0-> Error MongoDB: " << except.toString() << endl;
+        exit(EXIT_FAILURE);
+    }
+    catch(...)
+    {
+        cout << "MPS1.0-> Unknow error" << endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
 
 bool SystemManager::registerRemoteDcmAET(const DcmAET& remoteAET)
 {

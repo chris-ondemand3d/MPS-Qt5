@@ -23,7 +23,7 @@ DBResultContainer* DBQueryRsp::next()
 {
     switch(this->m_type)
     {
-        case DBQueryType::DICOM_QUERY_RETRIEVE:
+        case DBQueryType::DICOM_QR_FIND:
         {
             DcmDataset* ds = new DcmDataset();
             switch(this->m_dcmQueryLevel)
@@ -54,6 +54,71 @@ DBResultContainer* DBQueryRsp::next()
                 }
             }
             break;
+        }
+        case DBQueryType::DICOM_QR_MOVE:
+        {
+            list<pair<string, string>> sopClassTS_Pair;
+            map<string, set<string>> sopClass_TSList;
+            
+            set<string> fileNames;
+            while (this->hasNext())
+            {
+                // creating element                
+                if (!this->m_currentResult->hasElement("series"))
+                    break;
+                mongo::BSONElement bElem = (*this->m_currentResult)["series"];
+                if (bElem.type() != mongo::BSONType::Array)
+                    break;
+                
+                vector<mongo::BSONElement> seriesArr = bElem.Array();                
+                for (mongo::BSONElement seriesElem : seriesArr)
+                {
+                    if (!seriesElem.Obj().hasElement("instances"))
+                        return new DBResultContainer(nullptr, DBResultContainerType::INVALID);
+                    
+                    mongo::BSONElement instanceArr = seriesElem["instances"];
+                    if (instanceArr.type() != mongo::BSONType::Array)
+                        return new DBResultContainer(nullptr, DBResultContainerType::INVALID);
+                    
+                    // everything is fine
+                    vector<mongo::BSONElement> instElements = instanceArr.Array();
+                    for (mongo::BSONElement instance : instElements)
+                    {
+                        string sopClassUID = instance["(0008,0016)"][MONGO_TAG_VALUE].String();
+                        if (sopClassUID.empty())
+                            continue;
+                        string tsUID = instance[MONGO_XFER][MONGO_XFER_UID].String();
+                        if (tsUID.empty())
+                            continue;
+                        
+                        // everything is fine
+                        map<string, set<string>>::iterator it = sopClass_TSList.find(sopClassUID);
+                         
+                        if ( it == sopClass_TSList.end()) // this sop class dosn't exist
+                        {
+                            sopClassTS_Pair.insert(sopClassTS_Pair.end(), pair<string,string>(sopClassUID, tsUID));
+                            set<string> tsList;
+                            tsList.insert(tsUID);
+                            sopClass_TSList[sopClassUID] = std::move(tsList);
+                        }
+                        else
+                        {
+                            // checking if exist the transfer syntax in the list of TS register
+                            if ((*it).second.find(tsUID) == (*it).second.end())
+                            {
+                                // the TS dosen't exist
+                                // registering the TS 
+                                (*it).second.insert(tsUID);
+                                sopClassTS_Pair.insert(sopClassTS_Pair.end(), pair<string,string>(sopClassUID, tsUID));
+                            }
+                        }
+                        
+                        fileNames.insert(instance[MONGO_INSTANCE_FILENAME].String());
+                    }
+                }
+                this->getNext();
+            }
+            return new DBResultContainer(new DBQRMoveContainer(fileNames, sopClassTS_Pair), DBResultContainerType::DB_QR_MOVE);
         }
     }
     
@@ -207,54 +272,6 @@ void DBQueryRsp::arrayBson2Dcm(vector< mongo::BSONElement >& bsonArr, DcmDataset
         // TODO: Notify this error
         cout << "Error in: void DBQueryRsp::arrayBson2Dcm(mongo::BSONElement& bsonArr, DcmDataset** ds, int pos)";
     }
-}
-
-
-DcmDataset* DBQueryRsp::nextDcmQRRsp()
-{    
-    if (this->m_currentResult == nullptr)
-    {
-        if (!this->getNext())
-            return nullptr;
-    }
-    // checking the result by query level
-    DcmDataset* queryResult = new DcmDataset();
-    switch(this->m_dcmQueryLevel)
-    { 
-        case QueryLevel::STUDY_LEVEL:
-        case QueryLevel::PATIENT_LEVEL:
-        {
-            
-            // there is pending result
-            int length = this->m_currentResult->nFields();
-            for (int i = 0; i < length; i++)
-            {
-                mongo::BSONElement bsonElement = (*this->m_currentResult)[i];
-                DcmElement* dcmElement = DBManager::bson2DcmElement(bsonElement);
-                if (dcmElement != nullptr)
-                    queryResult->insert(dcmElement);
-            }
-            if (queryResult->card() == 0)
-            {
-                delete queryResult;
-                queryResult = nullptr;
-            }
-            break;
-        }
-        
-        case QueryLevel::SERIES_LEVEL:
-        {
-            // getting the result in the series level
-            break;
-        }
-        
-        case QueryLevel::IMAGE_LEVEL:
-        {
-            break;
-        }
-    }
-    
-    return queryResult;
 }
 
 bool DBQueryRsp::hasNext()

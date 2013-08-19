@@ -12,24 +12,38 @@ MPSSystemSettings::MPSSystemSettings()
     this->m_systemSettings = new QSettings("HealthSoft", "MPS");
 }
 
-bool MPSSystemSettings::existRemoteAET(char* aet, char* hostname)
+DcmAET* MPSSystemSettings::aet(char* aet)
 {
     QString aetSetting((MPSSetting_REMOTE_AET_GROUP) + "/" + QString(aet));
     string aetValue, hostnameValue;
     int portValue;
+    
     if (this->m_systemSettings->contains(aetSetting))
     {
         char* aetSettingValue = strdup(this->m_systemSettings->value(aetSetting).toString().toStdString().c_str());
-        if (DcmAET::validateAetSettingValue(aetSettingValue,
-                                            aetValue,
-                                            hostnameValue,
-                                            portValue) &&
-           hostnameValue == string(hostname))
-            return true;
+        if (DcmAET::validateAetSettingValue(aetSettingValue, aetValue, hostnameValue, portValue))
+            return new DcmAET(aetValue, hostnameValue, portValue);
+    }
+    return nullptr;
+}
+
+bool MPSSystemSettings::existRemoteAET(char* aet)
+{
+    QString aetSetting((MPSSetting_REMOTE_AET_GROUP) + "/" + QString(aet));
+    string aetValue, hostnameValue;
+    int portValue;
+    bool valid = false;
+    if (this->m_systemSettings->contains(aetSetting))
+    {
+        char* aetSettingValue = strdup(this->m_systemSettings->value(aetSetting).toString().toStdString().c_str());
+        valid = DcmAET::validateAetSettingValue(aetSettingValue,
+                                                aetValue,
+                                                hostnameValue,
+                                                portValue);
+        delete aetSettingValue;
             
     }
-    
-    return false;
+    return valid;
 }
 
 

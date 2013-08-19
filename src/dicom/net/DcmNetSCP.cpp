@@ -2,15 +2,34 @@
 #include <db/DBQueryRsp.h>
 #include <QCryptographicHash>
 #include <stdlib.h>
-
-
+#include <dcmtk/dcmdata/dcvrcs.h>
+#include <dcmtk/dcmdata/dcrledrg.h>
+#include <dcmtk/dcmdata/dcrleerg.h>
+#include <dcmtk/dcmjpeg/djdecode.h>
+#include <dcmtk/dcmjpeg/djencode.h>
+#include <dcmtk/dcmjpls/djdecode.h>
+#include <dcmtk/dcmjpls/djencode.h>
 
 
 DcmNetSCP::DcmNetSCP ()
 {
     this->loadSettings();
     this->m_stop = false;
+    
+    // register codecs
+    DcmRLEDecoderRegistration::registerCodecs();
+    DcmRLEEncoderRegistration::registerCodecs();
+    DJDecoderRegistration::registerCodecs();
+    DJEncoderRegistration::registerCodecs();
+    DJLSDecoderRegistration::registerCodecs();
+    DJLSEncoderRegistration::registerCodecs();
 }
+
+void DcmNetSCP::registerCodecs()
+{
+    
+}
+
 
 void DcmNetSCP::loadSettings()
 {
@@ -69,7 +88,10 @@ void DcmNetSCP::loadSettings()
         setting->settings()->setValue(MPSSetting_LOCAL_SCP_FOLDER, this->m_rootFolder.c_str());
         setting->settings()->sync();
     }
+    
+    this->registerCodecs();
 }
+
 
 void DcmNetSCP::saveSettings()
 {
@@ -90,10 +112,6 @@ Status DcmNetSCP::cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     return result;
 }
 
-void DcmNetSCP::dcmDataset2BSON(const DcmDataset* ds)
-{
-    
-}
 
 
 Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
@@ -103,22 +121,26 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     DcmDataset* dsQuery = nullptr;
     Status result;
     DBManager* dbManager = DBManager::instance();
+    bool canceled = false;
     
     if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 5, &idPC, &dsQuery, nullptr, nullptr)).good())
     {
         // validating the query
         dsQuery->print(cout);
-        if (!DcmQuery::validateDcmQuery(dsQuery))
+        if (!DcmQuery::validateDcmQRFindQuery(dsQuery))
+        {
+            ASC_abortAssociation(assoc);
             return Status(StatusResult::CFindRSPError, "Bad query received from SCU.");
+        }
         
         // Query is fine
         DcmDataset* dsRspQuery;
         OFCondition cond;
         if (dsQuery != nullptr)
         {
-            DBQueryRsp* queryRsp = dbManager->dcmFind(dsQuery);
+            DBQueryRsp* queryRsp = dbManager->dcmQRFind(dsQuery);
             T_DIMSE_Message* rsp;
-            while(queryRsp != nullptr &&  queryRsp->hasNext())
+            while(queryRsp != nullptr &&  queryRsp->hasNext() && !canceled)
             {
                 DBResultContainer* resultContainer = queryRsp->next();
                 if (resultContainer->type() == DBResultContainerType::INVALID)
@@ -127,45 +149,70 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
                     delete dsQuery;
                     break;
                 }
-                
                 dsRspQuery = (DcmDataset*)resultContainer->value();                
                 rsp = new T_DIMSE_Message;
-                rsp->CommandField = DIMSE_C_FIND_RSP;
-                strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID,assoc->params->theirImplementationClassUID);
-                rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_PRESENT;
-                rsp->msg.CFindRSP.DimseStatus = STATUS_Pending;
-                rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
-                
+                DIMSEMessajeFactory::newCFindRSP(rsp, 
+                                                 assoc->nextMsgID, 
+                                                 assoc->params->theirImplementationClassUID,
+                                                 DIMSE_DATASET_PRESENT,
+                                                 STATUS_Pending);
                 // Sending response
                 cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, dsRspQuery, nullptr, nullptr, nullptr);
+                delete rsp;
                 if (cond.bad())
                 {
                     delete rsp;
+                    rsp = nullptr;
                     break;
                 }
+                
+                T_DIMSE_Message* msgReceived = nullptr;
+                // receiving responses
+                cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 0, &idPC, msgReceived, nullptr);
+                if (cond.good())
+                {
+                    if (msgReceived->CommandField == DIMSE_C_CANCEL_RQ)
+                    {
+                        // canceling C-FIND operation
+                        rsp = new T_DIMSE_Message;
+                        DIMSEMessajeFactory::newCFindRSP(rsp, 
+                                                         assoc->nextMsgID, 
+                                                         assoc->params->theirImplementationClassUID,
+                                                         DIMSE_DATASET_NULL,
+                                                         STATUS_FIND_Cancel_MatchingTerminatedDueToCancelRequest);
+                        
+                        DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+                        canceled = true;
+                        delete rsp;
+                        rsp = nullptr;
+                        break;
+                    }
+                }
+                
+                if (msgReceived != nullptr)
+                    delete msgReceived;
                 delete resultContainer;
                 delete dsRspQuery;
-                delete rsp;
             }
             
             delete queryRsp;
-            
-            // sending last response
-            rsp = new T_DIMSE_Message;
-            rsp->CommandField = DIMSE_C_FIND_RSP;
-            strcpy(rsp->msg.CFindRSP.AffectedSOPClassUID, assoc->params->theirImplementationClassUID);
-            rsp->msg.CFindRSP.DataSetType = DIMSE_DATASET_NULL;
-            rsp->msg.CFindRSP.DimseStatus = STATUS_Success;
-            rsp->msg.CFindRSP.MessageIDBeingRespondedTo = assoc->nextMsgID;
-            cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
-            
-            if (cond.good())
+           
+            if (!canceled)
             {
+                // sending last response
+                rsp = new T_DIMSE_Message;
+                DIMSEMessajeFactory::newCFindRSP(rsp, 
+                                                 assoc->nextMsgID, 
+                                                 assoc->params->theirImplementationClassUID,
+                                                 DIMSE_DATASET_NULL,
+                                                 STATUS_Success);
+               
+                cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
                 
+                if (cond.bad())
+                    // TODO: notify error sending C-FIND-RSP<
+                    result.setStatus(StatusResult::CFindRSPError, (string)"Error sending C-FIND-RSP: " + cond.text());
             }
-            else
-                // TODO: notify error sending C-FIND-RSP
-                result.setStatus(StatusResult::CFindRSPError, (string)"Error sending C-FIND-RSP: " + cond.text());
         }
         else
             // TODO: notify that the query is empty and that is an error.
@@ -181,9 +228,303 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     return result;
 }
 
-Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
+Status&& DcmNetSCP::negociateMoveSubOperationPC(T_ASC_Network** network, 
+                                                T_ASC_Association** subOpAssoc, 
+                                                T_ASC_Parameters* params, 
+                                                list< pair< string, string > >& sopClassTSPairs)
 {
-    // TODO: To make this, we need the MongoDb databse implementation
+    Status result;
+    T_ASC_PresentationContextID idPC = 1;
+    for (auto sopClassPair : sopClassTSPairs)
+    {
+        char** ts = new char*[1];
+        cout << "SOP Class - TS Pair: " << sopClassPair.first << " - " << sopClassPair.second << endl; 
+        ts[0] = strdup("1.2.840.10008.1.2");
+        ASC_addPresentationContext(params, 
+                                   idPC, 
+                                   const_cast<char*>(sopClassPair.first.c_str()), 
+                                   (const char**)ts, 
+                                   1);
+        idPC += 2;
+        
+        delete ts[0];
+        delete [] ts;
+    }
+    
+    // negociating the presentation context
+    OFCondition cond = ASC_requestAssociation(*network, params, subOpAssoc);
+    cout << "Condition result: " << cond.text() << endl;
+    int acceptedPC = ASC_countAcceptedPresentationContexts(params);
+    if (cond.bad() || acceptedPC == 0)
+        result.setStatus(StatusResult::AssociationError, "Error negociating the presentation context for C-MOVE suboperation.");
+    
+    return std::move(result);
+}
+
+
+Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc, 
+                           T_ASC_PresentationContextID idPC, 
+                           string& moveDestination)
+{
+    Status result;
+    T_DIMSE_Message* moveRSP = nullptr;
+    T_ASC_PresentationContext pc;
+    ASC_findAcceptedPresentationContext(assoc->params, idPC, &pc);
+    // checking if the AET for move is defined in the system.
+    if (!MPSSystemSettings::instance()->existRemoteAET(const_cast<char*>(moveDestination.c_str())))
+    {
+        moveRSP = new T_DIMSE_Message;
+        DIMSEMessajeFactory::newCMoveRSP(moveRSP,
+                                         assoc->nextMsgID,
+                                         assoc->params->theirImplementationClassUID,
+                                         STATUS_MOVE_Failed_MoveDestinationUnknown,
+                                         0,
+                                         0,
+                                         0,
+                                         0);
+        
+        DIMSE_sendMessageUsingMemoryData(assoc,
+                                         idPC,
+                                         moveRSP,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr);
+        delete moveRSP;
+        result.setStatus(StatusResult::CMoveRQError, "Unknow remote AET.");
+        return result;
+    }
+    
+    else
+    {        
+        OFCondition cond;
+        DcmDataset* dsQuery = nullptr;
+        Status result;
+        DBManager* dbManager = DBManager::instance();
+        
+        if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 5, &idPC, &dsQuery, nullptr, nullptr)).good())
+        {
+            QueryLevel moveQueryLevel = DcmQuery::validateDcmQRMoveQuery(dsQuery);
+            if(moveQueryLevel == QueryLevel::INVALID_VALUE)
+            {
+                result.setStatus(StatusResult::CMoveRSPError, "Bad C-MOVE query.");
+                ASC_abortAssociation(assoc);
+            }
+            else
+            {
+                // The query is fine
+                DcmCodeString* queryLevel = new DcmCodeString(DCM_QueryRetrieveLevel);
+                queryLevel->putString(DcmQuery::queryLevel2Str(moveQueryLevel).c_str());
+                dsQuery->insert(queryLevel, true);
+                
+                DBQueryRsp* moveQueryResult = dbManager->dcmQRMove(dsQuery);
+                moveRSP = new T_DIMSE_Message;
+                
+                DBResultContainer* resultContainer = moveQueryResult->next();
+                if (resultContainer->type() == DBResultContainerType::INVALID)
+                {
+                    delete resultContainer;
+                    delete dsQuery;
+                    
+                    DIMSEMessajeFactory::newCMoveRSP(moveRSP,
+                                                     assoc->nextMsgID,
+                                                     assoc->params->theirImplementationClassUID,
+                                                     STATUS_MOVE_Failed_UnableToProcess,
+                                                     0,
+                                                     0,
+                                                     0,
+                                                     0);
+                    
+                    DIMSE_sendMessageUsingMemoryData(assoc,
+                                                     idPC,
+                                                     moveRSP,
+                                                     nullptr,
+                                                     nullptr,
+                                                     nullptr,
+                                                     nullptr);
+                    delete moveRSP;
+                    result.setStatus(StatusResult::CMoveRQError, "Unable to process the C-MOVE operation.");
+                    return result;
+                }
+                else // everything is fine
+                {
+                    // making a store scu for move
+                    T_ASC_Association* assocStore;
+                    T_ASC_Parameters* params;
+                    ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
+                    ASC_setAPTitles(params,
+                                    strdup(this->m_aet.aet().c_str()),
+                                    strdup(moveDestination.c_str()),
+                                    nullptr);
+                    
+                    DcmAET* remoteAET = MPSSystemSettings::instance()->aet(const_cast<char*>(moveDestination.c_str()));
+                    stringstream remoteAETAddr;
+                    remoteAETAddr << remoteAET->hostname() << ":" << remoteAET->port();
+                    ASC_setPresentationAddresses(params,
+                                                 strdup(this->m_aet.hostname().c_str()),
+                                                 strdup(remoteAETAddr.str().c_str()));
+                    
+                    // initializing network for STORE SCU association
+                    T_ASC_Network* storeNetwork = nullptr;
+                    if (ASC_initializeNetwork(NET_REQUESTOR, remoteAET->port(), DICOME_NETWORK_TIMEOUT, &storeNetwork).good())
+                    {
+                        // negociating presentation context for C-STORE-RQ
+                        bool canceled = false;
+                        DBQRMoveContainer* dbMoveRSP = (DBQRMoveContainer*)resultContainer->value();
+                        list<pair<string,string>> sopClassTSPairs = dbMoveRSP->sopClassTSPairs();
+                        if (this->negociateMoveSubOperationPC(&storeNetwork, &assocStore, params, sopClassTSPairs).good())
+                        {
+                            DcmNetSCU* storeSCU = new DcmNetSCU(this->m_aet);
+                            int completeSubOperations = 0;
+                            int failedSubOperations = 0;
+                            int remainingSubOperations = dbMoveRSP->filenames().size();
+                            int warningSubOperations = 0;
+                            set<string> filenames = dbMoveRSP->filenames();
+                            cout << "filenames count: " << remainingSubOperations << endl;
+                            for (string filename : filenames)
+                            {
+                                // sending file;
+                                cond = storeSCU->cstore_RQ(*remoteAET, filename, assocStore, 5);
+                                switch(cond.code())
+                                {
+                                    case STATUS_STORE_Warning_CoercionOfDataElements:
+                                    case STATUS_STORE_Warning_DataSetDoesNotMatchSOPClass:
+                                    case STATUS_STORE_Warning_ElementsDiscarded:
+                                    {
+                                        warningSubOperations++;
+                                        break;
+                                    }
+                                    
+                                    case STATUS_Success:
+                                    {
+                                        completeSubOperations++;
+                                        break;
+                                    }
+                                    
+                                    default:
+                                    {
+                                        failedSubOperations++;
+                                        break;
+                                    }
+                                }
+                                remainingSubOperations--;
+                                moveRSP = new T_DIMSE_Message;
+                                DIMSEMessajeFactory::newCMoveRSP(moveRSP,
+                                                                 assoc->nextMsgID,
+                                                                 assoc->params->theirImplementationClassUID,
+                                                                 STATUS_Pending,
+                                                                 completeSubOperations,
+                                                                 failedSubOperations,
+                                                                 remainingSubOperations,
+                                                                 warningSubOperations);
+                                
+                                cond = DIMSE_sendMessageUsingMemoryData(assoc,idPC, moveRSP, nullptr, nullptr, nullptr, nullptr);                                    
+                                delete moveRSP;
+                                moveRSP = nullptr;
+                                
+                                // receiving messages
+                                if (DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING,0, &idPC, moveRSP, nullptr).good())
+                                {
+                                    if (moveRSP->CommandField == DIMSE_C_CANCEL_RQ)
+                                        // canceling the C-MOVE operation
+                                    {
+                                        canceled = true;
+                                        moveRSP = new T_DIMSE_Message;
+                                        DIMSEMessajeFactory::newCMoveRSP(moveRSP, 
+                                                                         assoc->nextMsgID, 
+                                                                         assoc->params->theirImplementationClassUID,
+                                                                         STATUS_FIND_Cancel_MatchingTerminatedDueToCancelRequest,
+                                                                         completeSubOperations,
+                                                                         failedSubOperations,
+                                                                         remainingSubOperations,
+                                                                         warningSubOperations);
+                                        
+                                        DIMSE_sendMessageUsingMemoryData(assoc, idPC, moveRSP, nullptr, nullptr, nullptr, nullptr);
+                                        result.setStatus(StatusResult::CMoveRSPError, "C-MOVE operation canceled by the peer.");
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    if (moveRSP != nullptr)
+                                    {
+                                        delete moveRSP;
+                                        moveRSP = nullptr;
+                                    }
+                                }
+                            }
+                            
+                            // sending the STATUS_Success message
+                            if (!canceled)
+                            {
+                                moveRSP = new T_DIMSE_Message;
+                                
+                                DIMSEMessajeFactory::newCMoveRSP(moveRSP, 
+                                                                 assoc->nextMsgID,
+                                                                 assoc->params->theirImplementationClassUID,
+                                                                 STATUS_Success,
+                                                                 completeSubOperations, 
+                                                                 failedSubOperations,
+                                                                 remainingSubOperations,
+                                                                 warningSubOperations);
+                                
+                                DIMSE_sendMessageUsingMemoryData(assoc, idPC, moveRSP, nullptr, nullptr, nullptr, nullptr);
+                                result.setStatus(StatusResult::Success, "MOVE Operation Success");
+                                ASC_releaseAssociation(assocStore);
+                                
+                                delete moveRSP;
+                            }
+                            
+                            delete storeSCU;
+                        }
+                        else
+                        {
+                            if (assocStore != nullptr)
+                                ASC_dropAssociation(assocStore);                            
+                            ASC_dropNetwork(&storeNetwork);
+                            
+                            T_ASC_PresentationContext pc;
+                            ASC_findAcceptedPresentationContext(assoc->params, idPC, &pc);
+                            moveRSP = new T_DIMSE_Message;
+                            DIMSEMessajeFactory::newCMoveRSP(moveRSP, 
+                                                             assoc->nextMsgID,
+                                                             assoc->params->theirImplementationClassUID,
+                                                             ASC_BADPRESENTATIONCONTEXTID.theStatus,
+                                                             0,0,0,0);
+                            
+                            DIMSE_sendMessageUsingMemoryData(assoc,
+                                                             idPC,
+                                                             moveRSP,
+                                                             nullptr,
+                                                             nullptr,
+                                                             nullptr,
+                                                             nullptr);
+                            delete moveRSP;
+                            result.setStatus(StatusResult::CMoveRQError, "Unable to process the C-MOVE operation. Bad C-STORE suboperation Presentation Context.");
+                            return result;
+                        }
+                            
+                    }
+                    else
+                    {
+                        if (storeNetwork != nullptr)
+                            delete storeNetwork;
+                        result.setStatus(StatusResult::CMoveRSPError, "Network for C-STORE suboperation in C-MOVE DIMSE Service is unreachable.");
+                    }
+                
+                    delete remoteAET;
+                }
+            }
+        }
+        else
+        {
+            result.setStatus(StatusResult::CMoveRSPError, "Error receiving C-MOVE query dataset.");
+            if (dsQuery != nullptr)
+                delete dsQuery;
+        }
+    }
+    
+    return result;
 }
 
 Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
@@ -237,10 +578,6 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
         result.setStatus(StatusResult::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
 }
 
-Status DcmNetSCP::receiveCommand(T_ASC_Association* assoc, T_DIMSE_Message& message)
-{
-
-}
 
 
 void DcmNetSCP::acceptingPresentationContext(T_ASC_Association* assoc)
@@ -313,7 +650,7 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
         MPSSystemSettings* systemSettings = SystemManager::instance()->mpsSystem()->settings();
         DUL_ASSOCIATESERVICEPARAMETERS* dulAssParams = &(assoc->params->DULparams);
         cout << dulAssParams->callingAPTitle << endl;
-        if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle, dulAssParams->callingPresentationAddress))
+        if (!systemSettings->existRemoteAET(dulAssParams->callingAPTitle))
         {
             T_ASC_RejectParameters rejParams;            
             rejParams.reason = ASC_REASON_SU_CALLINGAETITLENOTRECOGNIZED;
@@ -386,7 +723,8 @@ void DcmNetSCP::handleIncomingConnection(T_ASC_Network* network, T_ASC_Associati
                             
                         case DIMSE_C_MOVE_RQ:
                         {
-                            *result = this->cmoveSCP(assoc, idPC);
+                            string moveDestination(msgRQ.msg.CMoveRQ.MoveDestination);
+                            *result = this->cmoveSCP(assoc, idPC, moveDestination);
                             break;
                         }
                             
@@ -428,20 +766,18 @@ void DcmNetSCP::abortAssociation(T_ASC_Association* assoc)
 
 void DcmNetSCP::start()
 {
-    cout << "probando esta paja " << endl;
     T_ASC_Network* network;
     OFCondition cond;
-    cout << "Port number: " << this->m_aet.port() << endl;
+    
     if ((cond = ASC_initializeNetwork(NET_ACCEPTORREQUESTOR, this->m_aet.port(), 0, &network)).good())
     {        
         T_ASC_Association* assoc;
-        cout << "Port number: " << this->m_aet.port() << endl;
+        
         while (true)
         {
             if (ASC_receiveAssociation(network, &assoc, ASC_DEFAULTMAXPDU).good())
             {
                 // create new handle connection thread
-                cout << "request received" << endl; 
                 Task* task = TaskFactory::newHandleRqDCMConn(this, network, assoc);                
                 task->start();
             }
@@ -460,5 +796,10 @@ void DcmNetSCP::stop()
 
 DcmNetSCP::~DcmNetSCP()
 {
-   
+    DcmRLEDecoderRegistration::cleanup();
+    DcmRLEEncoderRegistration::cleanup();
+    DJDecoderRegistration::cleanup();
+    DJEncoderRegistration::cleanup();
+    DJLSDecoderRegistration::cleanup();
+    DJLSEncoderRegistration::cleanup();
 }

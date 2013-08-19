@@ -18,6 +18,11 @@ DBResultContainer::DBResultContainer(void* dataValue, DBResultContainerType type
             this->m_data.ds = (DcmDataset*)dataValue;
             break;
         }
+        case DBResultContainerType::DB_QR_MOVE:
+        {
+            this->m_data.moveDcmFile = (DBQRMoveContainer*)dataValue;
+            break;
+        }
     }
     
     this->m_type = type;
@@ -32,6 +37,9 @@ void* DBResultContainer::value()
             
         case DBResultContainerType::MONGO_BSON_OBJECT:
             return this->m_data.bsonObject;
+            
+        case DBResultContainerType::DB_QR_MOVE:
+            return this->m_data.moveDcmFile;
     }
     
     return nullptr;

@@ -21,8 +21,10 @@
 #include <regex>
 
 
-using namespace std;
+#define DICOME_NETWORK_TIMEOUT                      5
 
+using namespace std;
+#include <dicom/net/DcmNetSCU.h>
 
 class DcmNetSCP
 {
@@ -33,11 +35,14 @@ protected:
     // DICOM operations
     
     void acceptingPresentationContext(T_ASC_Association* assoc);
-    Status receiveCommand(T_ASC_Association* assoc, T_DIMSE_Message& message);
     void loadSettings();
     void saveSettings();
-    void dcmDataset2BSON(const DcmDataset* ds);
     void abortAssociation(T_ASC_Association* assoc);
+    void registerCodecs();
+    Status&& negociateMoveSubOperationPC(T_ASC_Network** network, 
+                                         T_ASC_Association** subOpAssoc, 
+                                         T_ASC_Parameters* params, 
+                                         list< pair< string, string > >& sopClassTSPairs);
     
 public:
     DcmNetSCP();
@@ -46,7 +51,7 @@ public:
     Status cechoSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
     Status cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
     Status cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
-    Status cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC);
+    Status cmoveSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC, string& moveDestination);
     void stop();
     virtual ~DcmNetSCP();
     

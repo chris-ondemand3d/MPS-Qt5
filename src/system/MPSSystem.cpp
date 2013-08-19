@@ -1,4 +1,5 @@
 #include "MPSSystem.h"
+#include <tasks/TaskFactory.h>
 
 MPSSystem::MPSSystem(QObject* parent): QObject(parent)
 {

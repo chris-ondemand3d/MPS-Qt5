@@ -15,10 +15,12 @@ protected:
     DcmNetSCP* m_scp;
     T_ASC_Network* m_network;
     T_ASC_Association* m_association;
+    string m_moveDestination;
     
     explicit TaskQRMoveSCP(DcmNetSCP* scp,  
                            T_ASC_Association* assoc, 
                            T_ASC_PresentationContextID idPC,
+                           string& moveDestination,
                            QObject* parent = 0);
 public:
     virtual void run();

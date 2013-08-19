@@ -6,6 +6,11 @@
 
 using namespace std;
 
+enum class QueryDimseService
+{
+    C_FIND,
+    C_MOVE
+};
 
 enum class QueryLevel 
 {
@@ -31,7 +36,8 @@ public:
     inline void setQueryLevel(QueryLevel level){this->m_level = level;}
     inline QueryLevel queryLevel() const {return this->m_level;}
     void addKey(const DcmElement* key);
-    static bool validateDcmQuery(DcmDataset* ds);
+    static bool validateDcmQRFindQuery(DcmDataset* ds);
+    static QueryLevel validateDcmQRMoveQuery(DcmDataset* ds);
     static string queryLevel2Str(QueryLevel queryLevel);
     static QueryLevel str2QueryLevel(string queryLevel);
     bool isGood(); // this method validate the query object

@@ -7,6 +7,7 @@
 
 #include <QSettings>
 #include <utils/Singleton.h>
+#include <dicom/net/DcmAET.h>
 #include <QDir>
 
 
@@ -28,6 +29,7 @@
 
 
 using namespace std;
+class DcmAET;
 
 class MPSSystemSettings : public Singleton<MPSSystemSettings>
 {
@@ -39,7 +41,8 @@ public:
     QVariant value(const QString& keySetting);
     bool hasSetting(const QString& keySetting);
     bool insertRemoteAET(QString& aet, QString& hostname, int port);
-    bool existRemoteAET(char* aet, char* hostname);
+    bool existRemoteAET(char* aet);
+    DcmAET* aet(char* aet);
     inline QSettings* settings() {return this->m_systemSettings;}
     ~MPSSystemSettings();
 };
