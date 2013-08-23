@@ -9,13 +9,15 @@
 
 DBQueryRsp::DBQueryRsp(auto_ptr< mongo::DBClientCursor >& cursor, 
                        QueryLevel queryLevel, 
-                       DBQueryType type)
+                       DBQueryType type,
+                       DcmMoveQueryData* moveData)
 {
     this->m_cursor = cursor;
     this->m_seriesPos = this->m_instancePos = 0;
     this->m_currentResult = nullptr;
     this->m_type = type;
     this->m_dcmQueryLevel = queryLevel;
+    this->m_moveData = moveData;
     this->getNext();
 }
 
@@ -61,6 +63,7 @@ DBResultContainer* DBQueryRsp::next()
             map<string, set<string>> sopClass_TSList;
             
             set<string> fileNames;
+            bool finishInstance = false, finishSeries = false;
             while (this->hasNext())
             {
                 // creating element                
@@ -76,6 +79,18 @@ DBResultContainer* DBQueryRsp::next()
                     if (!seriesElem.Obj().hasElement("instances"))
                         return new DBResultContainer(nullptr, DBResultContainerType::INVALID);
                     
+                    // everything is fine
+                    // checking the query level for search results
+                    if (this->m_dcmQueryLevel == QueryLevel::SERIES_LEVEL ||
+                        this->m_dcmQueryLevel == QueryLevel::IMAGE_LEVEL)
+                    {
+                        // selecting the correct series for move operation
+                        string seriesInstancesUID = seriesElem.Obj()["(0020,000e)"][MONGO_TAG_VALUE].String();
+                        if (seriesInstancesUID != this->m_moveData->seriesInstancesUID())
+                            continue;
+                        else
+                            finishSeries = true;
+                    }
                     mongo::BSONElement instanceArr = seriesElem["instances"];
                     if (instanceArr.type() != mongo::BSONType::Array)
                         return new DBResultContainer(nullptr, DBResultContainerType::INVALID);
@@ -84,6 +99,16 @@ DBResultContainer* DBQueryRsp::next()
                     vector<mongo::BSONElement> instElements = instanceArr.Array();
                     for (mongo::BSONElement instance : instElements)
                     {
+                        // checking if is IMAGE query level for move
+                        if (this->m_dcmQueryLevel == QueryLevel::IMAGE_LEVEL)
+                        {
+                            string sopInstancesUID = instance["(0008,0018)"][MONGO_TAG_VALUE].String();
+                            if ( sopInstancesUID != this->m_moveData->sopInstancesUID())
+                                continue;
+                            else
+                                finishInstance = true;
+                        }
+                            
                         string sopClassUID = instance["(0008,0016)"][MONGO_TAG_VALUE].String();
                         if (sopClassUID.empty())
                             continue;
@@ -114,8 +139,14 @@ DBResultContainer* DBQueryRsp::next()
                         }
                         
                         fileNames.insert(instance[MONGO_INSTANCE_FILENAME].String());
+                        if (finishInstance)
+                            break;
                     }
+                    if (finishSeries)
+                        break;
                 }
+                if (finishSeries || finishInstance)
+                    break;
                 this->getNext();
             }
             return new DBResultContainer(new DBQRMoveContainer(fileNames, sopClassTS_Pair), DBResultContainerType::DB_QR_MOVE);
@@ -284,3 +315,21 @@ DBQueryRsp::~DBQueryRsp()
 {
     this->m_cursor.release();
 }
+
+
+DcmMoveQueryData::DcmMoveQueryData(QueryLevel queryLevel, 
+                                   string studyInstancesUID, 
+                                   string seriesInstancesUID, 
+                                   string sopInstancesUID)
+{
+    this->m_qeryLevel = queryLevel;
+    this->m_studyInstanceUID = studyInstancesUID;
+    this->m_seriesInstancesUID = seriesInstancesUID;
+    this->m_sopInstancesUID = sopInstancesUID;
+}
+
+DcmMoveQueryData::~DcmMoveQueryData()
+{
+    
+}
+

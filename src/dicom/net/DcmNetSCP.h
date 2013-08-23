@@ -43,6 +43,8 @@ protected:
                                          T_ASC_Association** subOpAssoc, 
                                          T_ASC_Parameters* params, 
                                          list< pair< string, string > >& sopClassTSPairs);
+    void delTagsDiferentToKeyLevels(DcmDataset* dsQuery);
+    QFileInfo* dirFromDS(DcmDataset* ds);
     
 public:
     DcmNetSCP();

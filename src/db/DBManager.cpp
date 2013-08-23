@@ -994,7 +994,7 @@ DBQueryRsp* DBManager::dcmQRMove(DcmDataset* queryDS)
     mongo::BSONObjBuilder projection;  
     mongo::BSONObjBuilder query;
     unsigned long card = queryDS->card();
-    
+
     OFString queryLevel;
     if (queryDS->findAndGetOFString(DCM_QueryRetrieveLevel, queryLevel).bad())
         return nullptr;
@@ -1012,18 +1012,35 @@ DBQueryRsp* DBManager::dcmQRMove(DcmDataset* queryDS)
     mongo::BSONObjBuilder projMove;
     projMove << "series.instances.Transfer\ Syntax" << 1 << 
                 "series.instances.filename" << 1  <<
-                "series.instances.(0008,0016)" << 1;
-                
-    if (qLevel >= QueryLevel::STUDY_LEVEL || qLevel >= QueryLevel::PATIENT_LEVEL)
-        projMove << 
-        "(0008,0061)" << 1 <<
-        "(0020,1208)" << 1 <<
-        "(0020,1206)" << 1;
-        
+                "series.instances.(0008,0016)" << 1 <<
+                "series.instances.(0008,0018)" << 1 <<
+                "(0008,0061)" << 1 <<
+                "(0020,1208)" << 1 <<
+                "(0020,1206)" << 1 <<
+                "series.(0020,1209)" << 1 << 
+                "series.(0020,000e)" << 1;
+    
+    OFString studyInstanceUID, seriesInstanceUID, sopInstancesUID;
+    
+    if (qLevel >= QueryLevel::STUDY_LEVEL)
+        if ((queryDS->findAndGetOFString(DCM_StudyInstanceUID, studyInstanceUID).bad() ||
+            studyInstanceUID.empty()))
+            return nullptr;
+    
     if (qLevel >= QueryLevel::SERIES_LEVEL)
-        projMove << "(0020,1209)" << 1;
+       if (queryDS->findAndGetOFString(DCM_SeriesInstanceUID, seriesInstanceUID).bad() ||
+           seriesInstanceUID.empty())
+            return nullptr;
     
+    if (qLevel == QueryLevel::IMAGE_LEVEL)
+       if (queryDS->findAndGetOFString(DCM_SOPInstanceUID, sopInstancesUID).bad() ||
+           sopInstancesUID.empty())
+           return nullptr;
     
+    DcmMoveQueryData* moveData = new DcmMoveQueryData(qLevel, 
+                                                      studyInstanceUID.c_str(),
+                                                      seriesInstanceUID.c_str(),
+                                                      sopInstancesUID.c_str());
     mongo::BSONObj fieldsToReturn = projMove.done();
     mongo::BSONObj objQuery = query.done();
     mongo::Query mongoQuery(objQuery.toString(false,true));
@@ -1032,13 +1049,12 @@ DBQueryRsp* DBManager::dcmQRMove(DcmDataset* queryDS)
         return nullptr;
     
     this->openConnection();
-    cout << "Mongo Move Query: " << mongoQuery.toString() << endl;
     auto_ptr<mongo::DBClientCursor> cursor = this->m_mongoConn->query(DB_STUDIES_COLLECTION,
                                                                       mongoQuery,
                                                                       0,
                                                                       0,
                                                                       &fieldsToReturn);
-    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QR_MOVE);    
+    DBQueryRsp* rsp = new DBQueryRsp(cursor, qLevel, DBQueryType::DICOM_QR_MOVE, moveData);    
     return rsp;
 }
 

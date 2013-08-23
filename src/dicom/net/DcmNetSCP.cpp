@@ -126,7 +126,6 @@ Status DcmNetSCP::cfindSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID
     if ((cond = DIMSE_receiveDataSetInMemory(assoc, DIMSE_NONBLOCKING, 5, &idPC, &dsQuery, nullptr, nullptr)).good())
     {
         // validating the query
-        dsQuery->print(cout);
         if (!DcmQuery::validateDcmQRFindQuery(dsQuery))
         {
             ASC_abortAssociation(assoc);
@@ -313,9 +312,12 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
             else
             {
                 // The query is fine
+                this->delTagsDiferentToKeyLevels(dsQuery);
                 DcmCodeString* queryLevel = new DcmCodeString(DCM_QueryRetrieveLevel);
                 queryLevel->putString(DcmQuery::queryLevel2Str(moveQueryLevel).c_str());
                 dsQuery->insert(queryLevel, true);
+                
+                // removing all tags diferent to the key levels
                 
                 DBQueryRsp* moveQueryResult = dbManager->dcmQRMove(dsQuery);
                 moveRSP = new T_DIMSE_Message;
@@ -349,8 +351,8 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                 else // everything is fine
                 {
                     // making a store scu for move
-                    T_ASC_Association* assocStore;
-                    T_ASC_Parameters* params;
+                    T_ASC_Association* assocStore = nullptr;
+                    T_ASC_Parameters* params = nullptr;
                     ASC_createAssociationParameters(&params, ASC_DEFAULTMAXPDU);
                     ASC_setAPTitles(params,
                                     strdup(this->m_aet.aet().c_str()),
@@ -372,7 +374,7 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                         bool canceled = false;
                         DBQRMoveContainer* dbMoveRSP = (DBQRMoveContainer*)resultContainer->value();
                         list<pair<string,string>> sopClassTSPairs = dbMoveRSP->sopClassTSPairs();
-                        if (this->negociateMoveSubOperationPC(&storeNetwork, &assocStore, params, sopClassTSPairs).good())
+                        if (dbMoveRSP->countInstances() > 0 && this->negociateMoveSubOperationPC(&storeNetwork, &assocStore, params, sopClassTSPairs).good())
                         {
                             DcmNetSCU* storeSCU = new DcmNetSCU(this->m_aet);
                             int completeSubOperations = 0;
@@ -380,7 +382,6 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                             int remainingSubOperations = dbMoveRSP->filenames().size();
                             int warningSubOperations = 0;
                             set<string> filenames = dbMoveRSP->filenames();
-                            cout << "filenames count: " << remainingSubOperations << endl;
                             for (string filename : filenames)
                             {
                                 // sending file;
@@ -430,6 +431,12 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                                     {
                                         canceled = true;
                                         moveRSP = new T_DIMSE_Message;
+                                        
+                                        // stoping the store sub-association
+                                        ASC_abortAssociation(assocStore);
+                                        ASC_dropAssociation(assocStore);
+                                        ASC_dropNetwork(&storeNetwork);
+                                        
                                         DIMSEMessajeFactory::newCMoveRSP(moveRSP, 
                                                                          assoc->nextMsgID, 
                                                                          assoc->params->theirImplementationClassUID,
@@ -527,10 +534,89 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
     return result;
 }
 
+void DcmNetSCP::delTagsDiferentToKeyLevels(DcmDataset* dsQuery)
+{
+    if (dsQuery == nullptr || 
+        dsQuery->isEmpty())
+        return;
+    
+    // everything is fine
+    for (int i = 0; i < dsQuery->card(); i++)
+    {
+        DcmElement* elem = dsQuery->getElement(i);
+        
+        if (elem->getTag() != DCM_StudyInstanceUID &&
+            elem->getTag() != DCM_SeriesInstanceUID &&
+            elem->getTag() != DCM_SOPInstanceUID)
+        {
+            // deleting tag
+            dsQuery->remove(elem);
+            i--;
+        }
+    }
+}
+
+
+QFileInfo* DcmNetSCP::dirFromDS(DcmDataset* ds)
+{
+    QFileInfo* dir4save = new QFileInfo();
+    char* baseDir = strdup(this->m_rootFolder.c_str());
+    OFString studyInstanceUID, seriesInstanceUID, sopInstanceUID, patientName, patientID, studyDate;
+    // getting patientID
+    
+    ds->findAndGetOFString(DCM_PatientName, patientName);
+    ds->findAndGetOFString(DCM_StudyDate, studyDate);
+    ds->findAndGetOFString(DCM_StudyInstanceUID, studyInstanceUID);
+    ds->findAndGetOFString(DCM_SeriesInstanceUID, seriesInstanceUID);
+    
+    QFileInfo fileInfo(baseDir);
+    if (fileInfo.isDir() &&
+        !studyDate.empty() &&
+        !studyInstanceUID.empty() &&
+        !seriesInstanceUID.empty())
+    {
+        // baseDir is valid directory
+        // building the new path
+        QString realPath(baseDir);
+        realPath += QDir::separator();
+        
+        realPath += studyDate.c_str();
+        realPath += QDir::separator();
+        // checking the patientName and patientID values
+        QString patName = patientName.empty() ? "PATIENT_NAME_UNKNOW" : patientName.c_str();
+        realPath += patName;
+        realPath += QDir::separator();
+        
+        // setting the study and series path
+        realPath += studyInstanceUID.c_str();
+        realPath += QDir::separator();
+        
+        realPath += seriesInstanceUID.c_str();
+        realPath += QDir::separator();
+        
+        // checking if exist the directory
+        fileInfo.setFile(realPath);
+        if (!fileInfo.exists()) // creating the directory
+        {
+            if (QDir().mkpath(realPath))
+                dir4save->setFile(realPath);
+            else
+                dir4save->setFile("");
+        }
+        else
+            dir4save->setFile(realPath);
+    }
+    
+    delete baseDir;
+    return dir4save;
+}
+
+
 Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextID idPC)
 {
     // receiving dataset
         DcmDataset* ds = nullptr;
+        T_DIMSE_Message* rsp = nullptr;
         Status result(StatusResult::Success, "Store file Success.");
         OFCondition cond;
         
@@ -558,24 +644,43 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             QDir dir4save(this->m_rootFolder.c_str());
             if (!dir4save.exists())
                 dir4save.mkpath(this->m_rootFolder.c_str());
-            char* filename = strdup((this->m_rootFolder.c_str() + (string)"/" + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());            
-            ds->saveFile(filename);
-            SystemManager::instance()->mpsSystem()->dbManager()->store(ds, filename);
             
-            delete ds;
-            delete [] filename;
-            T_DIMSE_Message* rsp = new T_DIMSE_Message;
-            DIMSEMessajeFactory::newCStoreRSP(rsp, 
-                                              assoc->nextMsgID++,
-                                              const_cast<char*>(sopClassUID.c_str()),
-                                              const_cast<char*>(sopInstanceUID.c_str()));
-            // Sending response messgae
-            DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+//             char* filename = strdup((this->m_rootFolder.c_str() + (string)"/" + (string)sopInstanceUID.c_str() + (string)".dcm").c_str());
+            QFileInfo* dirPath = this->dirFromDS(ds);
+            if (!dirPath->exists())
+            {
+                // Error with the dataset values
+                rsp = new T_DIMSE_Message;
+                DIMSEMessajeFactory::newCStoreRSP(rsp,
+                                                  assoc->nextMsgID++,
+                                                  const_cast<char*>(sopClassUID.c_str()),
+                                                  const_cast<char*>(sopInstanceUID.c_str()));
+                rsp->msg.CStoreRSP.DimseStatus = STATUS_STORE_Error_CannotUnderstand;
+                ASC_abortAssociation(assoc);
+                result.setStatus(StatusResult::CStoreRSPError, "Error creating directory tree from dataset.");
+            }
+            else
+            {
+                char* filename = strdup((dirPath->absolutePath() + QDir::separator() + sopInstanceUID.c_str() + ".dcm").toStdString().c_str());
+                ds->saveFile(filename);
+                SystemManager::instance()->mpsSystem()->dbManager()->store(ds, filename);
+                delete [] filename;
+                rsp = new T_DIMSE_Message;
+                DIMSEMessajeFactory::newCStoreRSP(rsp, 
+                                                  assoc->nextMsgID++,
+                                                  const_cast<char*>(sopClassUID.c_str()),
+                                                  const_cast<char*>(sopInstanceUID.c_str()));
+                // Sending response messgae
+                DIMSE_sendMessageUsingMemoryData(assoc, idPC, rsp, nullptr, nullptr, nullptr, nullptr);
+            }
             
             delete rsp;
+            delete ds;
         }
+        else
+            result.setStatus(StatusResult::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
         
-        result.setStatus(StatusResult::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
+        return result;
 }
 
 

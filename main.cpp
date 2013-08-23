@@ -40,7 +40,9 @@ void aaa(DcmElement* elem)
 
 int main(int argc, char** argv)
 {
-//     DcmFileFormat f;
+//     QDir().mkpath("/home/freddy/asdasd/rrrr/asdasdfs33/TORRES JOSE^L./");
+//     exit(0);
+    //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA_DCMTK.dcm");
 //     E_TransferSyntax ts = f.getDataset()->getOriginalXfer();
 // //     DcmRLEDecoderRegistration::registerCodecs();
