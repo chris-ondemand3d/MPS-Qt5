@@ -2,6 +2,11 @@
 #include <db/DBQueryRsp.h>
 #include <QCryptographicHash>
 #include <stdlib.h>
+#include <dcmtk/dcmdata/dcvrul.h>
+#include <dcmtk/dcmdata/dcvrsh.h>
+#include <dcmtk/dcmdata/dcvrae.h>
+#include <dcmtk/dcmdata/dcvrui.h>
+#include <dcmtk/dcmdata/dcvrobow.h>
 #include <dcmtk/dcmdata/dcvrcs.h>
 #include <dcmtk/dcmdata/dcrledrg.h>
 #include <dcmtk/dcmdata/dcrleerg.h>
@@ -366,7 +371,7 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                                                  strdup(this->m_aet.hostname().c_str()),
                                                  strdup(remoteAETAddr.str().c_str()));
                     
-                    // initializing network for STORE SCU association
+                    // initializing network for STORE SCU associationdicomDir
                     T_ASC_Network* storeNetwork = nullptr;
                     if (ASC_initializeNetwork(NET_REQUESTOR, remoteAET->port(), DICOME_NETWORK_TIMEOUT, &storeNetwork).good())
                     {
@@ -384,8 +389,9 @@ Status DcmNetSCP::cmoveSCP(T_ASC_Association* assoc,
                             set<string> filenames = dbMoveRSP->filenames();
                             for (string filename : filenames)
                             {
-                                // sending file;
-                                cond = storeSCU->cstore_RQ(*remoteAET, filename, assocStore, 5);
+                                // sending file;T_ASC_PresentationContext pc;
+                                ASC_findAcceptedPresentationContext(assoc->params, idPC, &pc);
+                                cond = storeSCU->cstore_RQ(*remoteAET, filename, assocStore, pc.presentationContextID, 5);
                                 switch(cond.code())
                                 {
                                     case STATUS_STORE_Warning_CoercionOfDataElements:
@@ -639,6 +645,8 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             OFString sopClassUID, sopInstanceUID;        
             ds->findAndGetOFString(DCM_SOPClassUID, sopClassUID);
             ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
+            T_ASC_PresentationContext pc;
+            ASC_findAcceptedPresentationContext(assoc->params, idPC, &pc);
             
             // saving the file
             QDir dir4save(this->m_rootFolder.c_str());
@@ -662,8 +670,14 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             else
             {
                 char* filename = strdup((dirPath->absolutePath() + QDir::separator() + sopInstanceUID.c_str() + ".dcm").toStdString().c_str());
-                ds->saveFile(filename);
                 SystemManager::instance()->mpsSystem()->dbManager()->store(ds, filename);
+                DcmFileFormat* dcmFile = new DcmFileFormat();
+                dcmFile->getDataset()->copyFrom(*ds);
+                delete ds;
+                ds = nullptr;
+                this->buildFileMetaInfo(dcmFile);
+                dcmFile->saveFile(filename);
+                delete dcmFile;
                 delete [] filename;
                 rsp = new T_DIMSE_Message;
                 DIMSEMessajeFactory::newCStoreRSP(rsp, 
@@ -675,12 +689,64 @@ Status DcmNetSCP::cstoreSCP(T_ASC_Association* assoc, T_ASC_PresentationContextI
             }
             
             delete rsp;
-            delete ds;
+            if (ds != nullptr)
+                delete ds;
         }
         else
             result.setStatus(StatusResult::CStoreRSPError, (string)"Error waiting the datatset: " + cond.text());
         
         return result;
+}
+
+void DcmNetSCP::buildFileMetaInfo(DcmFileFormat* dcmFile)
+{
+    OFString sopClassUId, sopInstanceUID;
+    
+    DcmDataset* datset = dcmFile->getDataset();
+    
+    datset->findAndGetOFString(DCM_SOPClassUID, sopClassUId);
+    datset->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
+    DcmElement* elem;
+    
+    elem = new DcmUnsignedLong(DCM_FileMetaInformationGroupLength);
+    Uint32 tmp = 0;
+    elem->putUint32Array(&tmp, 1);
+    dcmFile->getMetaInfo()->insert(elem, OFTrue);
+    
+    elem = new DcmOtherByteOtherWord(DCM_FileMetaInformationVersion);
+    Uint8 version[2] = {0, 1};
+    elem->putUint8Array(version,2);
+    dcmFile->getMetaInfo()->insert(elem, OFTrue);
+    
+    elem = new DcmUniqueIdentifier(DCM_MediaStorageSOPClassUID);
+    elem->putString(sopClassUId.c_str());
+    dcmFile->getMetaInfo()->insert(elem, OFTrue); 
+    
+    elem = new DcmUniqueIdentifier(DCM_MediaStorageSOPInstanceUID);
+    elem->putString(sopInstanceUID.c_str());
+    dcmFile->getMetaInfo()->insert(elem, OFTrue);
+    
+    elem = new DcmUniqueIdentifier(DCM_TransferSyntaxUID);
+    elem->putString(DcmXfer(datset->getOriginalXfer()).getXferID());
+    dcmFile->getMetaInfo()->insert(elem, OFTrue);
+    
+    elem = new DcmUniqueIdentifier(DCM_ImplementationClassUID);
+    elem->putString(sopClassUId.c_str());
+    dcmFile->getMetaInfo()->insert(elem, true);
+    
+    elem = new DcmShortString(DCM_ImplementationVersionName);
+    elem->putString(OFFIS_DTK_IMPLEMENTATION_VERSION_NAME);
+    dcmFile->getMetaInfo()->insert(elem, true);
+    
+    elem = new DcmApplicationEntity(DCM_SourceApplicationEntityTitle);
+    elem->putString("MPS");
+    dcmFile->getMetaInfo()->insert(elem, true);
+    
+    elem = new DcmUniqueIdentifier(DCM_PrivateInformationCreatorUID);
+    dcmFile->getMetaInfo()->insert(elem, true);
+    
+    elem = new DcmOtherByteOtherWord(DCM_PrivateInformation);
+    dcmFile->getMetaInfo()->insert(elem, true);
 }
 
 

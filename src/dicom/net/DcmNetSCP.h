@@ -45,6 +45,7 @@ protected:
                                          list< pair< string, string > >& sopClassTSPairs);
     void delTagsDiferentToKeyLevels(DcmDataset* dsQuery);
     QFileInfo* dirFromDS(DcmDataset* ds);
+    void buildFileMetaInfo(DcmFileFormat* dcmFile);
     
 public:
     DcmNetSCP();

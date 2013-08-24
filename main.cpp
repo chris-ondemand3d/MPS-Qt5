@@ -21,9 +21,15 @@
 #include <QCryptographicHash>
 #include <locale>
 #include <string>
+#include <dcmtk/dcmdata/dcvrae.h>
+#include <dcmtk/dcmdata/dcvrsh.h>
+#include <dcmtk/dcmdata/dcvrobow.h>
+#include <dcmtk/dcmdata/dcvrul.h>
+#include <dcmtk/dcmdata/dcwcache.h>
 #include <dcmtk/dcmdata/dccodec.h>
 #include <dcmtk/dcmdata/dcrledrg.h>
 #include <dcmtk/dcmdata/dcrleerg.h>
+#include <dcmtk/dcmdata/dcostrmf.h>
 #include <dcmtk/dcmjpeg/djdecode.h>
 #include <dcmtk/dcmjpeg/djencode.h>
 #include <dcmtk/dcmjpls/djdecode.h>
@@ -40,7 +46,71 @@ void aaa(DcmElement* elem)
 
 int main(int argc, char** argv)
 {
-//     QDir().mkpath("/home/freddy/asdasd/rrrr/asdasdfs33/TORRES JOSE^L./");
+
+//     DcmFileFormat f, f2;
+//     f.loadFile("/home/freddy/XA.dcm");
+//     DcmDataset* datset = f.getDataset();
+//     E_TransferSyntax oxfer = datset->getOriginalXfer();
+//     DcmWriteCache* cache = new DcmWriteCache();
+//     
+//     DcmMetaInfo* metainfo = new DcmMetaInfo;
+//     DcmOutputFileStream out("/home/freddy/probando.dcm");
+//     
+//     f2.getDataset()->copyFrom(*datset);
+//     OFString sopClassUId, sopInstanceUID;
+//     
+//     datset->findAndGetOFString(DCM_SOPClassUID, sopClassUId);
+//     datset->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
+//     DcmElement* elem;
+//     
+//     elem = new DcmUnsignedLong(DCM_FileMetaInformationGroupLength);
+//     Uint32 tmp = 0;
+//     elem->putUint32Array(&tmp, 1);
+//     f2.getMetaInfo()->insert(elem, OFTrue);
+//     
+//     elem = new DcmOtherByteOtherWord(DCM_FileMetaInformationVersion);
+//     Uint8 version[2] = {0, 1};
+//     elem->putUint8Array(version,2);
+//     f2.getMetaInfo()->insert(elem, OFTrue);
+//     
+//     elem = new DcmUniqueIdentifier(DCM_MediaStorageSOPClassUID);
+//     elem->putString(sopClassUId.c_str());
+//     f2.getMetaInfo()->insert(elem, OFTrue); 
+//     
+//     elem = new DcmUniqueIdentifier(DCM_MediaStorageSOPInstanceUID);
+//     elem->putString(sopInstanceUID.c_str());
+//     f2.getMetaInfo()->insert(elem, OFTrue);
+//     
+//     elem = new DcmUniqueIdentifier(DCM_TransferSyntaxUID);
+//     elem->putString(DcmXfer(datset->getOriginalXfer()).getXferID());
+//     f2.getMetaInfo()->insert(elem, OFTrue);
+//     
+//     elem = new DcmUniqueIdentifier(DCM_ImplementationClassUID);
+//     elem->putString(sopClassUId.c_str());
+//     f2.getMetaInfo()->insert(elem, true);
+//     
+//     elem = new DcmShortString(DCM_ImplementationVersionName);
+//     elem->putString(OFFIS_DTK_IMPLEMENTATION_VERSION_NAME);
+//     f2.getMetaInfo()->insert(elem, true);
+//     
+//     elem = new DcmApplicationEntity(DCM_SourceApplicationEntityTitle);
+//     elem->putString("MPS");
+//     f2.getMetaInfo()->insert(elem, true);
+//     
+//     elem = new DcmUniqueIdentifier(DCM_PrivateInformationCreatorUID);
+//     f2.getMetaInfo()->insert(elem, true);
+//     
+//     elem = new DcmOtherByteOtherWord(DCM_PrivateInformation);
+//     f2.getMetaInfo()->insert(elem, true);
+//     
+//     
+//     
+//     f2.getMetaInfo()->findAndGetElement(DCM_TransferSyntaxUID, elem);
+//     elem->print(cout);
+//     f2.saveFile("/home/freddy/probando.dcm");
+// //     ds->saveFile(, EXS_JPEGProcess1);
+//     exit(0);
+    //     QDir().mkpath("/home/freddy/asdasd/rrrr/asdasdfs33/TORRES JOSE^L./");
 //     exit(0);
     //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA_DCMTK.dcm");
@@ -124,11 +194,15 @@ int main(int argc, char** argv)
 //     DcmFileFormat f;
 //     f.loadFile("/home/freddy/XA.dcm");
 //     manager.store(f.getDataset());
-    DcmAET server1("COMMON", "localhost", 1111);
+    DcmAET server1("COMMON", "localhost", 44444);
     DcmAET server("DCM4CHEE", "localhost", 11112);
     QApplication app1(argc, argv);
     SystemManager::instance()->registerRemoteDcmAET(server1);
     SystemManager::instance()->initApp();
+    DcmNetSCU scumps(server1);
+    DcmAET mps("MPS", "localhost", 1104);
+    
+//     scumps.cstore_RQ(mps, "/home/freddy/XA.dcm");
     return app1.exec();
 
     

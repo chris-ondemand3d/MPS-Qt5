@@ -36,8 +36,13 @@ public:
     Status cecho_RQ(DcmAET& remoteAet, int timeout = 0);
     Status cstore_RQ(DcmAET& remoteAet, FileManager& directory, int timeout = 0);
     Status cstore_RQ(DcmAET& remoteAet, const list<string>& files, int timeout = 0);
-    Status cstore_RQ(DcmAET& remoteAet, const string& file, int timeout);
-    OFCondition cstore_RQ(DcmAET& remoteAET, const string& file, T_ASC_Association* assoc, int timeout = 0);
+    Status cstore_RQ(DcmAET& remoteAet, const string& file, int timeout = 0);
+    OFCondition cstore_RQ(DcmAET& remoteAET, 
+                          const string& file, 
+                          T_ASC_Association* assoc,  
+                          T_ASC_PresentationContextID idPC,
+                          int timeout = 0
+                         );
     Status cfind_RQ(DcmAET& remoteAet, DcmQuery& query, Callback<Progress>* proggres = nullptr);
     Status cmove_RQ(DcmAET& findAET, DcmAET& moveAET, 
                     DcmQuery& query,

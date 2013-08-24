@@ -293,28 +293,32 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const list< string >& files, int 
 }
 
 
-OFCondition DcmNetSCU::cstore_RQ(DcmAET& remoteAET, const string& file, T_ASC_Association* assoc, int timeout)
+OFCondition DcmNetSCU::cstore_RQ(DcmAET& remoteAET, 
+                                 const string& file, 
+                                 T_ASC_Association* assoc, 
+                                 T_ASC_PresentationContextID idPC,
+                                 int timeout
+                                )
 {
     Status result(StatusResult::Success, "C-STORE Success");
     OFCondition cond;
     
     DcmFileFormat* dcmFile = new DcmFileFormat();
-    OFString sopClassUID, xferUID, sopInstanceUID;
+    OFString sopClassUID, sopInstanceUID;
     if (dcmFile->loadFile(file.c_str()).good())
     {
         DcmDataset* ds = dcmFile->getDataset();
+        
         ds->findAndGetOFString(DCM_SOPClassUID, sopClassUID);
         ds->findAndGetOFString(DCM_SOPInstanceUID, sopInstanceUID);
-        xferUID = OFString(DcmXfer(ds->getOriginalXfer()).getXferID());
-        T_ASC_PresentationContextID pcID = ASC_findAcceptedPresentationContextID(assoc,
-                                                                                 const_cast<char*>(sopClassUID.c_str()),
-                                                                                 const_cast<char*>(xferUID.c_str()));
-        if (pcID == 0)
+        ds->chooseRepresentation(EXS_LittleEndianImplicit, nullptr);
+        
+        if (idPC == 0)
             return OFCondition(2000, 2000, OF_error, "Bad Presentation Context");
         if (ASC_countAcceptedPresentationContexts(assoc->params) > 0) // Checking accepted presentation context
         {
             
-            if (pcID != 0) // Presentation Context was accepted
+            if (idPC != 0) // Presentation Context was accepted
             {
                 T_DIMSE_Message reqMsg;
                 T_DIMSE_C_StoreRQ* req = &(reqMsg.msg.CStoreRQ);
@@ -325,11 +329,11 @@ OFCondition DcmNetSCU::cstore_RQ(DcmAET& remoteAET, const string& file, T_ASC_As
                 strcpy(req->AffectedSOPInstanceUID, sopInstanceUID.c_str());
                 req->Priority = DIMSE_PRIORITY_MEDIUM;
                 req->DataSetType = DIMSE_DATASET_PRESENT;
-                cond = DIMSE_sendMessageUsingMemoryData(assoc, pcID, &reqMsg, statusDetail, ds, nullptr, nullptr);
+                cond = DIMSE_sendMessageUsingMemoryData(assoc, idPC, &reqMsg, statusDetail, ds, nullptr, nullptr);
                 if (cond.good())
                 {
                     T_DIMSE_Message rsp;
-                    cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 0, &pcID, &rsp, nullptr, nullptr); 
+                    cond = DIMSE_receiveCommand(assoc, DIMSE_NONBLOCKING, 0, &idPC, &rsp, nullptr, nullptr); 
                     // TODO: Checking response status
                     cout << "Response Status for C-MOVE Suboperation: " << cond.text() << endl;
                 }
@@ -380,10 +384,9 @@ Status DcmNetSCU::cstore_RQ(DcmAET& remoteAet, const string& file, int timeout)
             );
             
             char** xferList = new char*[1];
-            xferList[0] = strdup(DcmXfer(EXS_LittleEndianImplicit).getXferID());
+            xferList[0] = strdup(DcmXfer(ds->getOriginalXfer()).getXferID());
             ASC_addPresentationContext(params, 1, sopClassUID.c_str(), (const char**)xferList, 1);
-            if ((cond = ds->chooseRepresentation(EXS_LittleEndianImplicit, nullptr)).good() && 
-                (cond = ASC_requestAssociation(network, params, &assoc)).good())
+            if ((cond = ASC_requestAssociation(network, params, &assoc)).good())
             {
                 // Checking
                 if (ASC_countAcceptedPresentationContexts(params) > 0) // Checking accepted presentation context
